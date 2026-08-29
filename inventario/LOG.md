@@ -45,6 +45,34 @@ por mi cuenta.
 
 # Historial
 
+## 2026-08-29 — `NOTA` — GMT130 (C-004): especificaciones confirmadas
+
+- **Qué pasó:** Verificación física del módulo. Confirmado: **`Driver IC: ST7789`,
+  3.3 V, 7 pines** (`GND · VCC · SCK · SDA · RES · DC · BLK`).
+- **Estado:** `Disponible` → `Disponible`
+- **Proyecto:** tamagotchi
+- **Nota:** Los 3 supuestos del S-07 quedan resueltos de una vez. Consecuencias:
+  (1) la librería `TFT_eSPI` es compatible con seguridad; (2) al ser 3.3 V se
+  conecta directo al ESP32 sin conversor de nivel; (3) al no tener `CS`, la
+  pantalla acapara el bus SPI — irrelevante hoy, importante si algún día se
+  agrega otro dispositivo SPI. Esto desbloqueó la fase 6: el plano físico ya está
+  escrito en `6-esquemas/conexiones-fisicas.md`.
+
+## 2026-08-29 — `NOTA` — C-003 (DEVKIT v1) tampoco es detectada
+
+- **Qué pasó:** Se conectó la C-003 (mini-USB) a través del hub UGreen. **No
+  aparece.** El árbol USB solo muestra el hub VIA Labs, el DisplayLink y el
+  Billboard. Cero puertos serie nuevos.
+- **Estado:** sin cambios
+- **Proyecto:** tamagotchi
+- **Nota:** Descarta que el problema sea exclusivo del USB-C (la hipótesis de las
+  resistencias CC), porque la C-003 es mini-USB y no puede tener ese problema.
+  Con dos placas distintas y dos conectores distintos fallando igual, el
+  sospechoso pasa a ser lo que tienen en común: **el cable o el puerto del hub**.
+  Sigue descartado que sea un driver: un dispositivo sin driver igual aparecería
+  en el árbol USB como no reconocido. Aquí no aparece *nada*, lo que significa
+  que la Mac no ve conexión eléctrica alguna.
+
 ## 2026-08-29 — `NOTA` — Nueva hipótesis sobre por qué C-001 no se detecta
 
 - **Qué pasó:** Al declarar el inventario salió un dato clave: **C-001 y C-002

@@ -73,10 +73,10 @@ Las carpetas siguen las 6 fases de la
 |---|---|---|
 | [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟡 4 escritos, 2 sin decidir |
 | [`2-entorno/`](2-entorno/) | El entorno aislado y cómo levantarlo | 🟢 PlatformIO 6.1.19 + esptool 5.3.1 instalados |
-| [`3-componentes/`](3-componentes/) | Ficha de cada pieza | 🟡 ESP32 y GMT130, por confirmar |
+| [`3-componentes/`](3-componentes/) | Ficha de cada pieza | 🟡 GMT130 ✅ confirmada · ESP32 pendiente |
 | [`4-requerimientos/`](4-requerimientos/) | Qué tiene que hacer el aparato | 🟢 Borrador listo |
 | [`5-investigacion/`](5-investigacion/) | Lo que hubo que averiguar, con fuentes | 🔴 Sin empezar |
-| [`6-esquemas/`](6-esquemas/) | El mapa: lógico y físico | 🟡 Lógico listo, físico pendiente |
+| [`6-esquemas/`](6-esquemas/) | El mapa: lógico y físico | 🟢 Los dos listos |
 | `firmware/` | El código | 🔴 Sin empezar |
 | [`BITACORA.md`](BITACORA.md) | Qué pasó en cada sesión | 🟢 Al día |
 

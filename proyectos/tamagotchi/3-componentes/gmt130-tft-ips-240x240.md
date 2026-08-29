@@ -3,8 +3,7 @@
 - **ID en inventario:** C-004 (tienes **4 unidades**)
 - **Categoría:** Pantalla
 - **Fecha de la ficha:** 2026-08-29
-- **Estado de la ficha:** ⚠️ **Por confirmar contra la plaquita física** — todo lo
-  marcado con ⚠️ hay que verificarlo mirando el módulo antes de conectar
+- **Estado de la ficha:** ✅ **Confirmada contra el módulo físico** (2026-08-29)
 - **Decisión asociada:** [ADR-0004](../1-decisiones/ADR-0004-pantalla-gmt130.md)
 
 ---
@@ -26,27 +25,23 @@ color" muy rápido, y de ahí sale el texto y los gráficos.
 | **1.3"** | La diagonal de la pantalla: unos 3.3 cm. Pequeñita |
 | **240×240** | Píxeles de ancho por alto. Cuadrada |
 | **GMT130** | El nombre del módulo (la placa verde donde va montada) |
-| **ST7789** ⚠️ | El chip controlador. Es el que "entiende" las órdenes del ESP32. **Por confirmar** |
+| **ST7789** ✅ | El chip controlador — el que "entiende" las órdenes del ESP32. **Confirmado: dice `Driver IC: ST7789` en la placa** |
 
 ## Alimentación
 
 | Concepto | Valor | Nota |
 |---|---|---|
-| Alimentación (`VCC`) | ⚠️ **3.3 V** | Por confirmar en la plaquita |
-| **Voltaje lógico** | ⚠️ **3.3 V** | Por confirmar |
+| Alimentación (`VCC`) | ✅ **3.3 V** | Confirmado: impreso en la placa |
+| **Voltaje lógico** | ✅ **3.3 V** | Confirmado |
 | Consumo típico | ~20–40 mA | Mayormente el backlight (la luz de atrás) |
 
-> ### 🎉 Buena noticia: no hace falta conversor de nivel
+> ### 🎉 Confirmado: no hace falta conversor de nivel
 >
-> Si se confirma que es 3.3 V (lo normal en este módulo), **la pantalla y el
-> ESP32 hablan el mismo idioma eléctrico**. Se conectan directo, sin piezas
-> intermedias y sin riesgo de quemar nada por voltaje.
->
-> ⚠️ **Pero confírmalo antes.** Si en la plaquita dice 5 V, avísame y replaneamos:
-> conectar una salida de 5 V a un pin del ESP32 lo daña.
+> La placa dice **3.3 V**, igual que el ESP32. **Hablan el mismo idioma
+> eléctrico**: se conectan directo, sin piezas intermedias y sin riesgo de quemar
+> nada por voltaje. Un problema menos.
 
-**¿Necesita conversor de nivel lógico con el ESP32?** ⚠️ Por confirmar — se
-espera que **no**.
+**¿Necesita conversor de nivel lógico con el ESP32?** ✅ **No.**
 
 ## Cómo se comunica
 
@@ -65,8 +60,12 @@ y el ESP32 tiene de sobra.
 
 ## Conexiones
 
-⚠️ **Pinout esperado — CONFIRMAR contra las etiquetas impresas en tu módulo
-antes de conectar.** La GMT130 típica trae 7 pines:
+✅ **Confirmado: 7 pines**, etiquetados `GND · VCC · SCK · SDA · RES · DC · BLK`.
+
+Los GPIO propuestos evitan a propósito los pines problemáticos del ESP32
+(los *strapping pins* 0/2/5/12/15, los pines 6–11 que van a la memoria flash, y
+los 34–39 que son solo de entrada). Existen igual en el DEVKIT v1 y en el
+NodeMCU-32S, así que la tabla sirve para cualquiera de tus 3 placas.
 
 | Pin del módulo | Qué es | Va a (ESP32, propuesto) | Nota |
 |---|---|---|---|
@@ -74,25 +73,27 @@ antes de conectar.** La GMT130 típica trae 7 pines:
 | `VCC` | Alimentación | `3V3` | ⚠️ **Nunca** al pin de 5 V / `VIN` |
 | `SCL` / `SCK` | Reloj SPI | `GPIO18` | Marca el ritmo de la comunicación |
 | `SDA` / `MOSI` | Datos SPI | `GPIO23` | Por aquí viajan los píxeles |
-| `RES` / `RST` | Reset | `GPIO4` | Reinicia la pantalla al arrancar |
-| `DC` / `A0` | Data/Command | `GPIO2` | Le dice a la pantalla si lo que llega es una orden o un dato |
-| `BLK` / `BL` | Backlight | `GPIO32` | La luz de atrás. En un pin PWM → **brillo regulable** (RNF-02) |
+| `RES` | Reset | `GPIO4` | Reinicia la pantalla al arrancar |
+| `DC` | Data/Command | `GPIO16` | Le dice a la pantalla si lo que llega es una orden o un dato |
+| `BLK` | Backlight | `GPIO32` | La luz de atrás. Pin con PWM → **brillo regulable** (RNF-02) |
 
-Los GPIO propuestos son tentativos: se fijan de verdad cuando confirmemos el
-modelo exacto del ESP32 y qué pines evitar.
-
-> ### ⚠️ Cuenta los pines de tu módulo
+> ### ✅ Confirmado: 7 pines, sin `CS`
 >
-> Si tiene **7 pines**, no tiene `CS` (*chip select*) — está fijo internamente.
-> Consecuencia: la pantalla **acapara el bus SPI** y no puedes poner otro
-> dispositivo SPI en paralelo. Para este proyecto no estorba, pero hay que saberlo.
+> Tu módulo no trae `CS` (*chip select*) — está fijo internamente en la placa.
 >
-> Si tiene **8 pines**, uno será `CS` y hay que conectarlo también.
+> **Qué implica:** el `CS` es la línea que dice "ahora te hablo a ti". Sirve para
+> que varios dispositivos compartan los mismos cables de datos y cada uno sepa
+> cuándo le toca. Sin `CS`, **la pantalla escucha todo lo que pasa por el bus
+> SPI** y no puedes poner otro dispositivo SPI en paralelo: se pelearían.
+>
+> Para el Tamagotchi da igual — solo hay pantalla. Pero si algún día le agregas
+> una tarjeta SD o un sensor SPI, hay que recordarlo.
+>
+> En la librería esto se configura poniendo el `CS` en `-1`.
 
 ## Precauciones
 
-- ⚠️ **Confirma el voltaje antes de conectar.** Si dice 5 V, no la conectes
-  directo: avísame primero.
+- ✅ Voltaje ya confirmado en 3.3 V. Se conecta directo al ESP32 sin riesgo.
 - ⚠️ **Conecta `GND` antes que nada** y desconéctalo al final. Sin tierra común,
   las señales de datos no tienen referencia y pasan cosas raras (o se daña algo).
 - ⚠️ **`VCC` nunca a `VIN` ni a 5 V.**
@@ -119,7 +120,8 @@ la pantalla se queda blanca, el problema está en las líneas de datos (`SDA`,
 ## Librería a usar
 
 - **Propuesta:** `TFT_eSPI` (de Bodmer). Es la estándar para ST7789 en ESP32 y va
-  muy rápida porque usa el hardware SPI del chip.
+  muy rápida porque usa el hardware SPI del chip. ✅ Con el ST7789 confirmado,
+  esta librería es compatible con seguridad.
 - **Alternativa:** `Adafruit_ST7789` + `Adafruit_GFX`. Más lenta pero mejor
   documentada para principiantes.
 - ⚠️ **Peculiaridad de `TFT_eSPI` que hay que saber:** los pines **no** se
@@ -127,7 +129,7 @@ la pantalla se queda blanca, el problema está en las líneas de datos (`SDA`,
   librería (`User_Setup.h`). Es poco intuitivo y es la causa #1 de "no me
   funciona la pantalla" con esta librería. Cuando lleguemos ahí te lo explico
   con calma.
-- Se decidirá formalmente en un ADR cuando confirmemos el controlador.
+- Se decidirá formalmente en el ADR-0008 al empezar a programar.
 
 ## Cuánto texto cabe realmente
 
