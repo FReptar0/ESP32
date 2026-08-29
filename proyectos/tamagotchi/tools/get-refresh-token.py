@@ -20,10 +20,13 @@
     ve el código que Spotify devuelve después.
 
  Uso:
-     python3 tools/get-refresh-token.py
+     python3 tools/get-refresh-token.py                    # perfil esp32
+     python3 tools/get-refresh-token.py --perfil completo  # + Web Playback SDK
+     python3 tools/get-refresh-token.py --help
 ============================================================
 """
 
+import argparse
 import base64
 import http.server
 import json
@@ -41,20 +44,60 @@ from pathlib import Path
 HOST, PORT = "127.0.0.1", 8888
 REDIRECT = f"http://{HOST}:{PORT}/callback"
 
-# ⚠️ SOLO el permiso mínimo necesario.
+# --- Permisos (scopes) ----------------------------------------------------
 #
-# /me/player/currently-playing pide únicamente este scope. NO pedimos
-# "user-modify-playback-state" a propósito: ese permitiría controlar la
-# reproducción (play, pausa, saltar), está fuera del alcance del proyecto,
-# y este token va a vivir dentro del ESP32. Si el aparato se pierde, lo
-# máximo que se filtra es qué música escuchas — no el control de tu cuenta.
-SCOPE = "user-read-currently-playing"
+# Un "scope" es un permiso concreto. El token que salga de aquí tendrá
+# exactamente los que se pidan, ni uno más. Decisión razonada en el ADR-0010.
+
+SCOPES = {
+    # --- Lo que necesita el ESP32 ---
+    "user-read-currently-playing": "Ver qué canción suena (RF-01 a RF-04)",
+    "user-read-playback-state":    "Ver el estado completo: aparatos, volumen, shuffle",
+    "user-modify-playback-state":  "CONTROLAR: play, pausa, siguiente, volumen",
+
+    # --- Solo para el Web Playback SDK, que corre en un NAVEGADOR ---
+    # El SDK no puede correr en el ESP32 (es JavaScript y necesita DRM).
+    # Estos tres sobran para el aparato; se piden con --perfil completo.
+    "streaming":        "[SDK] Reproducir audio en el navegador",
+    "user-read-email":  "[SDK] Requerido por el Web Playback SDK",
+    "user-read-private":"[SDK] Requerido por el Web Playback SDK",
+}
+
+PERFILES = {
+    # Lo que va dentro del ESP32: leer + controlar. Sin los del SDK.
+    "esp32": ["user-read-currently-playing",
+              "user-read-playback-state",
+              "user-modify-playback-state"],
+    # Todo, para cuando montes la página con Web Playback SDK.
+    "completo": list(SCOPES.keys()),
+    # Mínimo absoluto: solo leer. El más seguro si algún día lo quieres así.
+    "solo-lectura": ["user-read-currently-playing"],
+}
+
+_ap = argparse.ArgumentParser(description="Obtiene un refresh_token de Spotify.")
+_ap.add_argument("--perfil", choices=PERFILES, default="esp32",
+                 help="Qué permisos pedir (por defecto: esp32)")
+_args = _ap.parse_args()
+
+PERFIL = _args.perfil
+SCOPE = " ".join(PERFILES[PERFIL])
 
 SECRETS_H = Path(__file__).resolve().parent.parent / "firmware" / "include" / "secrets.h"
 
 # --- Credenciales ----------------------------------------------------------
 
 print(__doc__)
+print(f"Perfil de permisos: {PERFIL}")
+for _s in PERFILES[PERFIL]:
+    print(f"    · {_s:<28} {SCOPES[_s]}")
+print()
+if PERFIL == "esp32":
+    print("  (Para el Web Playback SDK en navegador: --perfil completo)")
+elif PERFIL == "completo":
+    print("  ⚠️ Este token podrá CONTROLAR tu reproducción. Si lo metes en el")
+    print("     ESP32 y el aparato se pierde, ese permiso se va con él.")
+    print("     Considera generar dos tokens: uno 'esp32' y otro 'completo'.")
+print()
 print(f"Redirect URI que debe estar registrado en tu app:\n    {REDIRECT}\n")
 print("(Si en el dashboard pusiste 'localhost' en vez de '127.0.0.1',")
 print(" cámbialo ahora: Spotify ya no acepta 'localhost'.)\n")
@@ -186,7 +229,11 @@ print()
 # --- Guardar en secrets.h --------------------------------------------------
 
 print("⚠️  El refresh_token es tan valioso como una contraseña: da acceso a tu")
-print("    cuenta de Spotify hasta que lo revoques desde tu perfil.\n")
+print("    cuenta de Spotify hasta que lo revoques desde tu perfil.")
+if "user-modify-playback-state" in SCOPE:
+    print("    Este token incluye CONTROL de reproducción: quien lo tenga puede")
+    print("    dar play, pausa y saltar canciones en tu cuenta.")
+print()
 
 if SECRETS_H.exists():
     resp = input(f"¿Lo escribo directamente en {SECRETS_H.name}? [S/n]: ").strip().lower()

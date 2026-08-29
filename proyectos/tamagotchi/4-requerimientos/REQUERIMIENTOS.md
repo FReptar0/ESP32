@@ -38,6 +38,9 @@ eso es esperado, no un problema.
 | RF-05 | Conectarse a WiFi solo, al encender | Debe | Se enchufa y a los < 30 s ya está mostrando algo, sin intervención | 🔲 Pendiente |
 | RF-06 | Indicar visualmente cuando **no** hay nada sonando | Debe | Pantalla en reposo distinguible, no la última canción congelada | 🔲 Pendiente |
 | RF-07 | Indicar visualmente cuando **perdió la conexión** | Debería | Se distingue "no hay música" de "no hay internet" — son problemas distintos | 🔲 Pendiente |
+| RF-08 | **Pausar y reanudar** la reproducción desde el aparato | Podría | Un control físico pausa lo que suena en el celular o la Mac en < 2 s | 🔲 Pendiente |
+| RF-09 | **Saltar** a la canción siguiente o anterior | Podría | Igual que RF-08, con siguiente/anterior | 🔲 Pendiente |
+| RF-10 | **Ajustar el volumen** desde el aparato | Podría | Un encoder o botones cambian el volumen del aparato que reproduce | 🔲 Pendiente |
 
 ## Requerimientos no funcionales
 
@@ -57,7 +60,13 @@ eso es esperado, no un problema.
 Esto es lo que **no** vamos a hacer en la primera versión. La lista existe para
 que el proyecto pueda terminarse:
 
-- ❌ **Controlar** Spotify desde el aparato (play, pausa, siguiente). Solo mostrar.
+- ⏩ ~~Controlar Spotify desde el aparato~~ → **entró al alcance** como RF-08 a
+  RF-10 (2026-08-29). No es de la v1, pero los permisos ya se piden desde ahora
+  para no repetir el flujo de OAuth. Ver
+  [ADR-0010](../1-decisiones/ADR-0010-permisos-de-spotify.md).
+- ❌ **Reproducir audio** desde el propio Tamagotchi. El ESP32 no puede: el Web
+  Playback SDK es JavaScript de navegador y necesita descifrado de DRM. El
+  aparato es un control remoto, no un altavoz.
 - ❌ Mostrar la **portada** del álbum. La pantalla ya no es el impedimento (la
   GMT130 es a color), pero sigue haciendo falta descargar y decodificar un JPEG
   dentro del ESP32, y eso es un proyecto entero aparte. Queda para después.
@@ -116,6 +125,7 @@ que el proyecto pueda terminarse:
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
+| 2026-08-29 | Controlar Spotify pasa de fuera de alcance a RF-08/09/10 | Decisión del usuario. Se piden los permisos desde ya para no repetir OAuth ([ADR-0010](../1-decisiones/ADR-0010-permisos-de-spotify.md)) |
 | 2026-08-29 | S-04 resuelto — el punto de control del ADR-0002 pasó con 199.4 KB de margen | Spike de memoria con TLS contra el servidor real de Spotify. La arquitectura directa se confirma |
 | 2026-08-29 | S-06 resuelto; S-04 con línea base medida | Primer firmware cargado con éxito: 303.5 KB de RAM libre y red de 2.4 GHz confirmada a −39 dBm |
 | 2026-08-29 | S-02 resuelto (la API sirve); nuevo S-09 (Premium) como bloqueante | Investigación de la API de Spotify. El riesgo #1 se cierra y aparece un prerequisito de cuenta |

@@ -34,7 +34,22 @@ lo toque.
 
 ## ✅ Hallazgos
 
-### 2026-08-29 — El scope mínimo para este proyecto es uno solo
+### 2026-08-29 — ❌ El Web Playback SDK no puede correr en el ESP32
+
+**Qué se averiguó:** el Web Playback SDK es una librería **JavaScript de
+navegador**. La documentación dice que *"no puede correr en dispositivos
+embebidos ni microcontroladores"*, y requiere soporte de medios cifrados (DRM) y
+Premium (no los planes solo-móvil).
+**Fuente:** [documentación oficial del Web Playback SDK](https://developer.spotify.com/documentation/web-playback-sdk).
+**Por qué importa:** el ESP32 **no puede reproducir audio de Spotify**. Pero sí
+puede **controlar** la reproducción de otro aparato, vía los endpoints de player
+de la Web API (`user-modify-playback-state` + Premium). El Tamagotchi es un
+control remoto, no un altavoz.
+**Confianza:** máxima (fuente primaria).
+**Consecuencia:** [ADR-0010](../1-decisiones/ADR-0010-permisos-de-spotify.md) ·
+RF-08 a RF-10 · "reproducir audio" queda fuera de alcance de forma permanente.
+
+### 2026-08-29 — ~~El scope mínimo para este proyecto es uno solo~~ *(superado)*
 
 **Qué se averiguó:** `/me/player/currently-playing` requiere únicamente
 **`user-read-currently-playing`**. No hace falta `user-read-playback-state` ni,
@@ -46,7 +61,10 @@ decisión propia, y además **este token va a vivir dentro del ESP32**: si el
 aparato se pierde o se presta, ese permiso se va con él. Pidiendo lo mínimo, en
 el peor caso alguien vería qué música escuchas, no manipularía la cuenta.
 **Confianza:** máxima.
-**Consecuencia:** `tools/get-refresh-token.py` pide solo ese scope.
+**Consecuencia:** ⏩ **Superado por el [ADR-0010](../1-decisiones/ADR-0010-permisos-de-spotify.md)**:
+el alcance del proyecto creció para incluir control de reproducción, así que se
+piden 3 permisos en vez de 1. El razonamiento de mínimo privilegio sigue siendo
+válido y se conserva — solo cambió qué es "lo mínimo necesario".
 
 
 ### 2026-08-29 — ✅ La memoria alcanza de sobra (resuelve S-04)
