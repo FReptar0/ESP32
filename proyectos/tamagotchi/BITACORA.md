@@ -581,6 +581,69 @@ instante, durante el handshake TLS. Sigue holgado.
 comparables.** Mismo binario, mismo punto del ciclo, suficientes muestras.
 Detalle en [`5-investigacion/memoria-en-regimen-2.md`](5-investigacion/memoria-en-regimen-2.md).
 
+### 💥🔀 Dos hilos de red: reinicios y letra equivocada
+
+Al separar la red en dos hilos aparecieron dos problemas serios.
+
+**1. Se reiniciaba constantemente.** El log lo dijo claro:
+
+```
+Task watchdog got triggered: IDLE0 (CPU 0) did not reset
+abort() was called on core 0
+```
+
+**Un handshake TLS no espera: CALCULA.** Ese fue mi error de concepto — trataba
+las peticiones como operaciones de espera, con el procesador libre. Para la
+transferencia es cierto; para el handshake no: es criptografía pura, 1-2 s de CPU
+real. Dos a la vez en el mismo núcleo lo saturaban, la tarea ociosa nunca corría,
+y el vigilante reiniciaba la placa.
+
+🔑 **"Esperando por la red" y "calculando" se parecen desde fuera y son
+completamente distintos por dentro.**
+
+Por eso un **tercer hilo lo habría empeorado**: sería un tercer handshake
+compitiendo por el mismo procesador.
+
+**Solución: un turno (mutex) para la red.** Una conexión cifrada a la vez.
+
+| | Antes | Ahora |
+|---|---|---|
+| Reinicios en 150 s | 11 | **0** |
+| Mínimo de RAM libre | 59 KB | **89 KB** |
+
+Y no se pierde lo buscado: el hilo de Spotify espera como mucho **una** petición
+de letra, nunca una cadena.
+
+**2. Se publicaba la letra de la canción anterior.** El usuario lo diagnosticó
+exacto: *"pareciera ser que termina la descarga de la letra previa"*.
+
+La comprobación que había no servía:
+
+```
+1. Empieza la descarga de la letra de A      claveObj = A
+2. Cambias a B -> consultar() escribe        claveObj = B, claveActual = B
+3. Termina la descarga (que era de A)
+4. Comprueba claveActual == claveObj -> B == B ✅ ¡pasa!
+5. Publica la letra de A como si fuera de B
+```
+
+Comparaba **dos variables que se actualizan juntas**: nunca detectaría nada.
+
+**Solución: un contador de generación** que sube con cada cambio de canción. Se
+apunta al empezar la descarga y se compara al terminar. Y el objetivo se **copia**
+al empezar, en vez de leerse al final.
+
+🔑 **Para saber si un resultado llega tarde, hay que marcarlo al EMPEZAR y
+comprobar la marca al terminar.** Es el principio del número de pedido: no miras
+lo que hay en la mesa, comparas contra el resguardo.
+
+**3. Frases largas recortadas.** La zona mide 112 px: caben 4 renglones grandes o
+5 chicos. Estaban limitados a 3 y 4, así que frases como *"And I know you're
+really mad at me, but you're on your way to some kind of life"* se cortaban con
+`...`, perdiendo el final — que es justo lo que le da sentido.
+
+Detalle en [`5-investigacion/concurrencia-y-carreras.md`](5-investigacion/concurrencia-y-carreras.md).
+
 ### ⛔ Al saltar de canción durante una búsqueda, se atascaba
 
 `buscar()` encadenaba hasta 5 peticiones (~8 s) **sin comprobar nada entre

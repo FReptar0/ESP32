@@ -30,6 +30,29 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — 💥 Dos handshakes TLS a la vez reiniciaban la placa
+
+**Qué pasaba:** `Task watchdog got triggered: IDLE0 did not reset` — 11 reinicios
+en 150 s. **Un handshake TLS no espera, CALCULA**: es criptografía pura, 1-2 s de
+CPU real. Dos a la vez en el mismo núcleo lo saturaban, la tarea ociosa nunca
+corría, y el vigilante reiniciaba.
+**Fuente:** propio, del log del crash — ver [`concurrencia-y-carreras.md`](concurrencia-y-carreras.md).
+🔑 **"Esperando por la red" y "calculando" se parecen desde fuera y son
+completamente distintos por dentro.** Un tercer hilo lo habría empeorado.
+**Consecuencia:** mutex de red (una conexión cifrada a la vez). 0 reinicios, y de
+regalo 30 KB más de RAM libre en el peor caso (89 KB contra 59 KB).
+
+### 2026-08-29 — 🔀 Se publicaba la letra de la canción anterior
+
+**Qué pasaba:** al saltar varias canciones, aparecía la letra de una anterior.
+La comprobación `if (claveActual == claveObj)` al terminar la descarga **no
+detectaba nada**, porque `claveObj` ya había cambiado con la canción nueva:
+comparaba dos variables que se actualizan juntas.
+🔑 **Para saber si un resultado llega tarde, hay que marcarlo al EMPEZAR y
+comprobar la marca al terminar.** Es el principio del número de pedido.
+**Consecuencia:** contador de generación + copia local del objetivo al empezar.
+
+
 ### 2026-08-29 — Una búsqueda larga dejaba al aparato ciego a los cambios
 
 **Qué pasaba:** al saltar de canción mientras se descargaba una letra, el aparato

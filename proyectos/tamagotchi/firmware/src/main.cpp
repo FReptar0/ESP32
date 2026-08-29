@@ -138,6 +138,37 @@ unsigned long ultimaConsulta = 0, ultimoRefresco = 0;
  *  escribiendo.
  * ============================================================ */
 SemaphoreHandle_t mutexDatos;
+
+/* ------------------------------------------------------------
+ *  Un turno para la radio, y un número de serie por canción
+ * ------------------------------------------------------------
+ *  MUTEX DE RED: solo UNA conexión cifrada a la vez.
+ *
+ *  Un handshake TLS no es esperar a la red: es CALCULAR. Son uno o
+ *  dos segundos de criptografía pura. Dos a la vez saturaban el
+ *  núcleo y el vigilante del sistema reiniciaba la placa:
+ *      "Task watchdog got triggered: IDLE0 did not reset"
+ *
+ *  Con el turno, el hilo de Spotify espera como mucho UNA petición
+ *  de letra (~1,2 s) — nunca una cadena de ellas.
+ *
+ *  GENERACIÓN: un número que sube con cada cambio de canción.
+ *
+ *  Sin él pasaba esto: se empieza a descargar la letra de A, cambias
+ *  a B, la descarga de A termina... y se publicaba como si fuera de
+ *  B. Comprobar "¿sigue siendo la misma canción?" AL FINAL no basta,
+ *  porque la variable que dice cuál es ya había cambiado.
+ *
+ *  🔑 Para saber si un resultado llega tarde, hay que marcarlo al
+ *     EMPEZAR y comprobar la marca al terminar. Mirar solo el estado
+ *     final no distingue "sigue igual" de "cambió y volvió a cambiar".
+ * ------------------------------------------------------------ */
+SemaphoreHandle_t mutexRed;
+volatile uint32_t generacion = 0;
+
+#define CON_RED(bloque) do { \
+  if (xSemaphoreTake(mutexRed, portMAX_DELAY) == pdTRUE) { bloque; \
+    xSemaphoreGive(mutexRed); } } while (0)
 String tituloAct, artistaAct;
 volatile bool pedirRedibujado = false;   // el núcleo 0 avisa al 1
 
@@ -333,7 +364,7 @@ void moverBarra(uint16_t color) {
 void cabecera(const char* titulo, const char* artista) {
   tft.fillRect(0, 30, 240, 40, TFT_BLACK);
   // aLatin1 conserva los acentos: la fuente generada llega al código 255.
-  String l[3]; bool g;
+  String l[6]; bool g;
   partirConReserva(aLatin1(String(titulo)), ANCHO, l, 1, g);
   escribir(l[0], Y_TITULO, false, TFT_WHITE);
   partirConReserva(aLatin1(String(artista)), ANCHO, l, 1, g);
@@ -398,7 +429,7 @@ unsigned long ultimoPaso = 0;
 
 // Guardamos cómo quedó repartida la frase para poder repintarla sin
 // recalcular nada en cada paso del fundido.
-String lineasFrase[4];
+String lineasFrase[6];
 int    numLineasFrase = 0, yFrase = 0, altoFrase = 0;
 bool   fraseGrande = true;
 
@@ -447,7 +478,7 @@ void zonaLetra(int idx) {
     numLineasFrase = 0; pasoFundido = PASOS_FUNDIDO;
     int sig = siguienteConTexto(idx < 0 ? 0 : idx + 1);
 
-    String s2[3]; bool g2 = false; int ns = 0;
+    String s2[6]; bool g2 = false; int ns = 0;
     if (sig >= 0) ns = partirConReserva(String(letras.lineas[sig].texto), ANCHO, s2, 2, g2);
 
     // Las notas van donde iría la frase actual: en el centro del bloque.
@@ -464,8 +495,15 @@ void zonaLetra(int idx) {
   // ------------------------------------------------------------------
   //  CANTANDO: la frase actual grande y blanca, con contexto en gris.
   // ------------------------------------------------------------------
+  /* La zona de la letra mide 112 px. Con la fuente grande (28 px) caben
+   * 4 renglones justos; con la chica (20 px), 5.
+   *
+   * Antes se permitían 3 y 4, y frases largas como "And I know you're
+   * really mad at me, but you're on your way to some kind of life" no
+   * cabían ni encogiendo, así que se recortaban con "..." — perdiendo
+   * el final de la frase, que muchas veces es lo que le da sentido. */
   numLineasFrase = partirConReserva(String(letras.lineas[idx].texto), ANCHO,
-                                    lineasFrase, 3, fraseGrande);
+                                    lineasFrase, 4, fraseGrande);
   int n = numLineasFrase;
   bool grande = fraseGrande;
   String* c = lineasFrase;
@@ -483,7 +521,7 @@ void zonaLetra(int idx) {
   if (hayHueco) {
     int ant = anteriorConTexto(idx - 1);
     if (ant >= 0) {
-      String a[3]; bool ga;
+      String a[6]; bool ga;
       partirConReserva(String(letras.lineas[ant].texto), ANCHO, a, 1, ga);
       escribir(a[0], Y_LETRA, false, GRIS_OSCURO);
     }
@@ -498,7 +536,7 @@ void zonaLetra(int idx) {
   if (hayHueco) {
     int sig = siguienteConTexto(idx + 1);
     if (sig >= 0) {
-      String sg[3]; bool gs;
+      String sg[6]; bool gs;
       partirConReserva(String(letras.lineas[sig].texto), ANCHO, sg, 1, gs);
       escribir(sg[0], Y_LETRA + ALTO_LETRA - ALTO_CHICA, false, GRIS);
     }
@@ -806,6 +844,7 @@ void consultar() {
     // Primero se avisa de la canción nueva para que el otro núcleo pinte
     // ya la cabecera y el "buscando letra...". Luego se descarga.
     CON_DATOS({
+      generacion++;                    // marca de agua: todo lo anterior caduca
       claveActual = clave;
       tituloAct = titulo; artistaAct = artista;
       colaPedida = false;
@@ -835,13 +874,15 @@ void consultar() {
 
 // ============================================================
 
-void tareaRed(void*);   // se define más abajo; setup() necesita conocerla
+void tareaSpotify(void*);   // se definen más abajo
+void tareaLetras(void*);
 
 void setup() {
   Serial.begin(115200); delay(400);
   ledcSetup(CANAL_PWM, 5000, 8); ledcAttachPin(TFT_BL, CANAL_PWM);
   ledcWrite(CANAL_PWM, BRILLO);
   mutexDatos = xSemaphoreCreateMutex();
+  mutexRed   = xSemaphoreCreateMutex();
   tft.init(); tft.setRotation(0);
   // El texto ya viene convertido a Latin-1 (un byte por carácter) desde
   // aLatin1(), así que hay que apagar el decodificador UTF-8 de la
@@ -866,10 +907,32 @@ void setup() {
   renovarToken();
   claveActual = "";
 
-  // La tarea de red va al núcleo 0. Pila generosa (16 KB): aquí se
-  // manejan cadenas y documentos JSON, y ya nos costó un reinicio
-  // quedarnos cortos una vez.
-  xTaskCreatePinnedToCore(tareaRed, "red", 16384, NULL, 1, NULL, 0);
+  /* ------------------------------------------------------------
+   *  Tres hilos, cada uno con un trabajo que no depende de los otros
+   * ------------------------------------------------------------
+   *  Antes había dos: red y dibujo. Pero dentro del hilo de red
+   *  convivían dos cosas de naturaleza muy distinta:
+   *
+   *    · Detectar cambios de canción — rápido, y DEBE ser puntual
+   *    · Descargar letras            — lento, y puede esperar
+   *
+   *  Al compartir hilo, lo lento retrasaba a lo urgente: si estabas
+   *  descargando una letra, un cambio de canción no se detectaba
+   *  hasta que terminara. Partir la descarga en pasos lo mejoró,
+   *  pero no lo resolvió: seguía habiendo que esperar al paso en
+   *  curso.
+   *
+   *  🔑 Si dos cosas tienen urgencias distintas, no comparten hilo.
+   *     Trocear lo lento solo reparte la espera; separarlo la elimina.
+   *
+   *  La tarea de Spotify tiene prioridad más alta: cuando ambas
+   *  quieren la radio, manda la que el usuario está esperando.
+   * ------------------------------------------------------------ */
+  //  Prioridad 2 para Spotify y 1 para las letras: cuando ambas quieren
+  //  el turno de red, gana la que el usuario está esperando. Nada por
+  //  encima de 2, para no dejar sin CPU a las tareas del sistema.
+  xTaskCreatePinnedToCore(tareaSpotify, "spotify", 12288, NULL, 2, NULL, 0);
+  xTaskCreatePinnedToCore(tareaLetras,  "letras",  16384, NULL, 1, NULL, 0);
 }
 
 // Latido de diagnóstico: cada 30 s imprime la memoria libre y el mínimo
@@ -882,7 +945,11 @@ unsigned long ultimoLatido = 0;
 // ============================================================
 //  NÚCLEO 0 — solo internet. Puede tardar lo que haga falta.
 // ============================================================
-void tareaRed(void*) {
+// ============================================================
+//  HILO 1 — Spotify. Rápido y puntual. UNA petición corta cada 2 s.
+//  Nunca espera a la descarga de una letra.
+// ============================================================
+void tareaSpotify(void*) {
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
       CON_DATOS({ claveActual = "__sinred__"; pedirRedibujado = true; });
@@ -894,74 +961,125 @@ void tareaRed(void*) {
       if (!renovarToken()) { vTaskDelay(pdMS_TO_TICKS(30000)); continue; }
     }
 
-    unsigned long ahora = millis();
     long falta = duracionMs - progresoAhora();
     unsigned long intervalo = (sonando && duracionMs > 0 && falta < (long)UMBRAL_FIN_MS)
                               ? CERCA_DEL_FIN_MS : cadaCuantoMs;
-    if (ahora - ultimaConsulta >= intervalo) { ultimaConsulta = ahora; consultar(); }
+    if (millis() - ultimaConsulta >= intervalo) {
+      ultimaConsulta = millis();
+      CON_RED({ consultar(); });       // espera como mucho UNA petición ajena
+    }
 
-    // --- UNA petición lenta por vuelta, sea cual sea ---
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+// ============================================================
+//  HILO 2 — Letras. Lento, y puede tardar lo que quiera.
+//  Si la canción cambia mientras trabaja, tira lo que llevaba.
+// ============================================================
+// Por debajo de este margen, el hilo de letras se aparta. Medido: el
+// mínimo histórico en funcionamiento normal es ~59 KB, así que 45 KB
+// solo se alcanzaría en una situación anómala.
+const uint32_t RAM_MINIMA = 45000;
+
+void tareaLetras(void*) {
+  for (;;) {
+    if (WiFi.status() != WL_CONNECTED || accessToken == "") {
+      vTaskDelay(pdMS_TO_TICKS(1000)); continue;
+    }
+
+    /* --------------------------------------------------------------
+     *  Red de seguridad: la letra es lo prescindible
+     * --------------------------------------------------------------
+     *  Los dos hilos pueden tener una conexión cifrada abierta a la
+     *  vez, y cada una cuesta ~50 KB. Si por lo que sea la memoria
+     *  bajara demasiado, el que debe apartarse es ESTE: sin letra el
+     *  aparato sigue mostrando la canción; sin memoria, se reinicia.
+     *
+     *  🔑 Cuando dos cosas compiten por un recurso escaso, hay que
+     *     decidir de antemano cuál cede. Si no se decide, cede la que
+     *     pida primero — que es aleatorio.
+     * -------------------------------------------------------------- */
+    if (ESP.getFreeHeap() < RAM_MINIMA) {
+      Serial.printf("[Letras] ⏸ memoria baja (%lu B), esperando\n",
+                    (unsigned long)ESP.getFreeHeap());
+      vTaskDelay(pdMS_TO_TICKS(2000));
+      continue;
+    }
+
     if (fase != FASE_NADA) {
-      // Si estábamos buscando la letra de la canción actual y esa canción
-      // ya cambió, lo que quedaba no sirve.
-      if (!faseEsPrecarga && claveActual != claveObj) {
+      // Se copia el objetivo AHORA, junto con la generación. A partir de
+      // aquí se trabaja con la copia: aunque la canción cambie a mitad de
+      // la descarga, sabremos que lo que traemos ya no vale.
+      uint32_t miGen; bool esPre; Fase f; int cand;
+      String cl, t, a, al; long d;
+      CON_DATOS({ miGen = generacion; esPre = faseEsPrecarga; f = fase;
+                  cand = candidatoActual; cl = claveObj;
+                  t = tObj; a = aObj; al = alObj; d = dObj; });
+
+      if (!esPre && cl != claveActual) {
         Serial.println("[Letra] ⛔ cancelada: cambió la canción");
-        fase = FASE_NADA;
+        CON_DATOS({ if (generacion == miGen) fase = FASE_NADA; });
         precarga.limpiar();
-      } else {
-        const uint8_t* ca = rootca_crt_bundle_start;
-        bool ok = false, terminado = false;
+        vTaskDelay(pdMS_TO_TICKS(100));
+        continue;
+      }
 
-        switch (fase) {
+      const uint8_t* ca = rootca_crt_bundle_start;
+      bool ok = false, terminado = false;
+      Fase siguiente = f;
+
+      // Una sola petición, y con el turno de red tomado.
+      CON_RED({
+        switch (f) {
           case FASE_COLA:
-            if (pedirCola()) { fase = FASE_EXACTA; candidatoActual = 0; precarga.limpiar(); }
-            else fase = FASE_NADA;
+            if (pedirCola()) { siguiente = FASE_EXACTA; cand = 0; precarga.limpiar(); }
+            else { siguiente = FASE_NADA; }
             break;
-
           case FASE_EXACTA:
-            ok = precarga.pedirExacta(ca, tObj, aObj, alObj, dObj / 1000);
-            if (ok) { terminado = true; }
-            else fase = FASE_CANDIDATOS;
+            ok = precarga.pedirExacta(ca, t, a, al, d / 1000);
+            if (ok) terminado = true; else siguiente = FASE_CANDIDATOS;
             break;
-
           case FASE_CANDIDATOS:
-            if (precarga.buscarCandidatos(ca, tObj, aObj, dObj / 1000)) {
-              fase = FASE_PROBAR; candidatoActual = 0;
-            } else terminado = true;
+            if (precarga.buscarCandidatos(ca, t, a, d / 1000)) { siguiente = FASE_PROBAR; cand = 0; }
+            else terminado = true;
             break;
-
           case FASE_PROBAR:
-            ok = precarga.pedirPorId(ca, precarga.candidatos[candidatoActual]);
-            candidatoActual++;
-            if (ok || candidatoActual >= precarga.numCandidatos) terminado = true;
+            ok = precarga.pedirPorId(ca, precarga.candidatos[cand]);
+            cand++;
+            if (ok || cand >= precarga.numCandidatos) terminado = true;
             break;
-
           default: break;
         }
+      });
 
-        if (terminado) {
+      CON_DATOS({
+        if (generacion != miGen && !esPre) {
+          // Llegó tarde: mientras descargábamos, la canción cambió. Este
+          // resultado es la letra de OTRA canción. Se tira, y no se toca
+          // `fase` porque ya está apuntando al trabajo nuevo.
+          Serial.println("[Letra] ⛔ descartada: llegó tarde");
+          precarga.limpiar();
+        } else if (terminado) {
           fase = FASE_NADA;
           if (!ok) precarga.estado = LETRA_NO_HAY;
-
-          if (faseEsPrecarga) {
-            // Se queda guardada, esperando a que llegue esa canción.
-            clavePrecarga = claveObj;
+          if (esPre) {
+            clavePrecarga = cl;
             Serial.printf("[Precarga] lista (%d líneas) · RAM %lu B\n",
                           precarga.n, (unsigned long)ESP.getFreeHeap());
-          } else if (claveActual == claveObj) {
-            // Solo se publica si la canción sigue siendo la misma: si no,
-            // sería la letra de otra.
-            CON_DATOS({ letras = precarga; precarga.limpiar();
-                        lineaPintada = -2; pedirRedibujado = true; });
+          } else {
+            letras = precarga; precarga.limpiar();
+            lineaPintada = -2; pedirRedibujado = true;
             Serial.printf("[Letra] %s (%d líneas) · RAM %lu B\n",
                           ok ? "✅" : "❌ no encontrada", letras.n,
                           (unsigned long)ESP.getFreeHeap());
           }
+        } else {
+          fase = siguiente; candidatoActual = cand;
         }
-      }
+      });
     }
 
-    // La precarga solo arranca cuando NO hay nada en curso.
     if (fase == FASE_NADA && !colaPedida && sonando
         && letras.estado != LETRA_NO_BUSCADA
         && progresoAhora() > 8000 && claveActual.length() && claveActual[0] != '_') {
@@ -969,7 +1087,7 @@ void tareaRed(void*) {
       fase = FASE_COLA; faseEsPrecarga = true;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
