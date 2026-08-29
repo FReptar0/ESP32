@@ -108,6 +108,41 @@ const int HUECO_BUCLE = 40;   // separación entre el final y el reinicio
 
 int  lineaPintada = -2;
 unsigned long ultimaConsulta = 0, ultimoRefresco = 0;
+
+/* ============================================================
+ *  Los dos núcleos del ESP32
+ * ============================================================
+ *  PROBLEMA: pedirle algo a internet BLOQUEA. Una consulta a
+ *  Spotify tarda ~1,2 s (sobre todo el handshake TLS), y durante
+ *  ese tiempo el programa no hace nada más — ni dibujar.
+ *
+ *  Como se consulta cada 2 segundos, el texto que se desplaza se
+ *  congelaba ~18 píxeles cada vez. Esas eran las pausas: no venían
+ *  del bucle del texto, sino de la red parando el dibujo.
+ *
+ *  SOLUCIÓN: el ESP32 tiene DOS núcleos. Se reparte el trabajo:
+ *
+ *      Núcleo 0  ->  hablar con internet (puede bloquearse)
+ *      Núcleo 1  ->  dibujar, y solo dibujar (nunca se bloquea)
+ *
+ *  Así la red puede tardar lo que quiera: la animación no se entera.
+ *
+ *  ⚠️ Reparto deliberado: TODO el dibujo se queda en un solo núcleo.
+ *     La librería de pantalla no está preparada para que dos núcleos
+ *     dibujen a la vez — se corrompería la imagen. Con esta división
+ *     nunca ocurre.
+ *
+ *  Lo único que comparten son los datos, y para eso está el mutex:
+ *  un turno que garantiza que nadie lea a medias lo que el otro está
+ *  escribiendo.
+ * ============================================================ */
+SemaphoreHandle_t mutexDatos;
+String tituloAct, artistaAct;
+volatile bool pedirRedibujado = false;   // el núcleo 0 avisa al 1
+
+#define CON_DATOS(bloque) do { \
+  if (xSemaphoreTake(mutexDatos, portMAX_DELAY) == pdTRUE) { bloque; \
+    xSemaphoreGive(mutexDatos); } } while (0)
 String estadoPintado;
 
 long progresoAhora() {
@@ -590,8 +625,8 @@ void consultar() {
 
   if (cod == 204) {                       // nada sonando: NO es un error (RF-06)
     if (claveActual != "__nada__") {
-      claveActual = "__nada__"; letras.limpiar(); sonando = false;
-      pantallaMensaje("En silencio", "no hay nada sonando", GRIS);
+      CON_DATOS({ claveActual = "__nada__"; letras.limpiar(); sonando = false;
+                  pedirRedibujado = true; });
     }
     https.end(); return;
   }
@@ -631,37 +666,45 @@ void consultar() {
 
   String clave = String(titulo) + "|" + String(artista);
   if (clave != claveActual) {
-    claveActual = clave;
-    estadoPintado = ""; lineaPintada = -2;
-    colaPedida = false;
-    tft.fillScreen(TFT_BLACK);
-    cabecera(titulo, artista);
     Serial.printf("\n🎵 %s — %s\n", titulo, artista);
+    bool desdePrecarga = (clave == clavePrecarga && precarga.estado != LETRA_NO_BUSCADA);
 
-    if (clave == clavePrecarga && precarga.estado != LETRA_NO_BUSCADA) {
-      // 🚀 Ya la teníamos descargada: aparece al instante, sin ir a la red.
-      letras = precarga;
-      clavePrecarga = "";
-      precarga.limpiar();
+    // Primero se avisa de la canción nueva para que el otro núcleo pinte
+    // ya la cabecera y el "buscando letra...". Luego se descarga.
+    CON_DATOS({
+      claveActual = clave;
+      tituloAct = titulo; artistaAct = artista;
+      colaPedida = false;
+      if (desdePrecarga) { letras = precarga; clavePrecarga = ""; precarga.limpiar(); }
+      else letras.limpiar();
+      pedirRedibujado = true;
+    });
+
+    if (desdePrecarga) {
       Serial.printf("[Letra] ⚡ desde precarga (%d líneas)\n", letras.n);
     } else {
-      letras.limpiar();
-      zonaLetra(-1);                    // "buscando letra..."
-      letras.buscar(rootca_crt_bundle_start, titulo, artista, album, duracionMs);
+      // La búsqueda se hace FUERA del mutex: tarda segundos y bloquearía
+      // al núcleo que dibuja. Se escribe sobre `precarga`, que nadie está
+      // mirando, y al final se intercambia en un instante.
+      precarga.limpiar();
+      precarga.buscar(rootca_crt_bundle_start, titulo, artista, album, duracionMs);
+      CON_DATOS({ letras = precarga; precarga.limpiar();
+                  lineaPintada = -2; pedirRedibujado = true; });
       Serial.printf("[Letra] %d líneas · RAM %lu B\n", letras.n, (unsigned long)ESP.getFreeHeap());
     }
-    lineaPintada = -2;                  // forzar repintado con la letra ya cargada
   }
   if (!nombreContexto.length()) nombreContexto = sonando ? "Reproduciendo" : "En pausa";
-  barraEstado(sonando, sonando ? VERDE_SPOTIFY : GRIS);
 }
 
 // ============================================================
+
+void tareaRed(void*);   // se define más abajo; setup() necesita conocerla
 
 void setup() {
   Serial.begin(115200); delay(400);
   ledcSetup(CANAL_PWM, 5000, 8); ledcAttachPin(TFT_BL, CANAL_PWM);
   ledcWrite(CANAL_PWM, BRILLO);
+  mutexDatos = xSemaphoreCreateMutex();
   tft.init(); tft.setRotation(0);
   // El texto ya viene convertido a Latin-1 (un byte por carácter) desde
   // aLatin1(), así que hay que apagar el decodificador UTF-8 de la
@@ -685,6 +728,11 @@ void setup() {
   pantallaMensaje("Tamagotchi", "hablando con Spotify...", TFT_WHITE);
   renovarToken();
   claveActual = "";
+
+  // La tarea de red va al núcleo 0. Pila generosa (16 KB): aquí se
+  // manejan cadenas y documentos JSON, y ya nos costó un reinicio
+  // quedarnos cortos una vez.
+  xTaskCreatePinnedToCore(tareaRed, "red", 16384, NULL, 1, NULL, 0);
 }
 
 // Latido de diagnóstico: cada 30 s imprime la memoria libre y el mínimo
@@ -694,6 +742,39 @@ void setup() {
 // distinguen.
 unsigned long ultimoLatido = 0;
 
+// ============================================================
+//  NÚCLEO 0 — solo internet. Puede tardar lo que haga falta.
+// ============================================================
+void tareaRed(void*) {
+  for (;;) {
+    if (WiFi.status() != WL_CONNECTED) {
+      CON_DATOS({ claveActual = "__sinred__"; pedirRedibujado = true; });
+      WiFi.reconnect();
+      vTaskDelay(pdMS_TO_TICKS(5000));
+      continue;
+    }
+    if (accessToken == "" || millis() > tokenCaducaEn) {
+      if (!renovarToken()) { vTaskDelay(pdMS_TO_TICKS(30000)); continue; }
+    }
+
+    unsigned long ahora = millis();
+    long falta = duracionMs - progresoAhora();
+    unsigned long intervalo = (sonando && duracionMs > 0 && falta < (long)UMBRAL_FIN_MS)
+                              ? CERCA_DEL_FIN_MS : cadaCuantoMs;
+    if (ahora - ultimaConsulta >= intervalo) { ultimaConsulta = ahora; consultar(); }
+
+    if (!colaPedida && sonando && letras.estado != LETRA_NO_BUSCADA
+        && progresoAhora() > 8000 && claveActual.length() && claveActual[0] != '_') {
+      colaPedida = true;
+      precargarSiguiente();
+    }
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+}
+
+// ============================================================
+//  NÚCLEO 1 — solo dibujar. Nunca se bloquea.
+// ============================================================
 void loop() {
   if (millis() - ultimoLatido > 30000) {
     ultimoLatido = millis();
@@ -704,50 +785,34 @@ void loop() {
                   (unsigned long)ESP.getMaxAllocHeap());
   }
 
-  if (WiFi.status() != WL_CONNECTED) {
-    if (claveActual != "__sinred__") {
-      claveActual = "__sinred__";
-      pantallaMensaje("Sin conexion", "reintentando...", TFT_RED);
-    }
-    WiFi.reconnect(); delay(5000); return;
-  }
-  if (accessToken == "" || millis() > tokenCaducaEn) {
-    if (!renovarToken()) { delay(30000); return; }
-  }
-
-  unsigned long ahora = millis();
-
-  // Sondeo ADAPTATIVO: cada 2 s normalmente, y cada 1 s en los últimos 15
-  // segundos de la canción. Así se detectan rápido las pausas y los
-  // cambios manuales, sin abusar del límite de peticiones.
-  long falta = duracionMs - progresoAhora();
-  unsigned long intervalo = (sonando && duracionMs > 0 && falta < (long)UMBRAL_FIN_MS)
-                            ? CERCA_DEL_FIN_MS : cadaCuantoMs;
-
-  if (ahora - ultimaConsulta >= intervalo) { ultimaConsulta = ahora; consultar(); }
-
-  // Una vez la canción está en marcha, se aprovecha para descargar la
-  // letra de la siguiente. Se hace a los 8 s para no competir con la
-  // carga de la actual.
-  if (!colaPedida && sonando && letras.estado != LETRA_NO_BUSCADA
-      && progresoAhora() > 8000 && claveActual.length() && claveActual[0] != '_') {
-    colaPedida = true;
-    precargarSiguiente();
+  // ¿El núcleo 0 avisó de que cambió algo? Se repinta la cabecera.
+  if (pedirRedibujado) {
+    pedirRedibujado = false;
+    CON_DATOS({
+      if (claveActual == "__sinred__") {
+        pantallaMensaje("Sin conexion", "reintentando...", TFT_RED);
+      } else if (claveActual == "__nada__") {
+        pantallaMensaje("En silencio", "no hay nada sonando", GRIS);
+      } else {
+        tft.fillScreen(TFT_BLACK);
+        estadoPintado = ""; lineaPintada = -2;
+        cabecera(tituloAct.c_str(), artistaAct.c_str());
+      }
+    });
   }
 
-  // ...pero la letra se refresca 6 veces por segundo, calculando el
-  // progreso a partir del reloj interno. Así avanza suave en vez de a
-  // saltos, y de paso no se gastan peticiones de más.
-  if (ahora - ultimoRefresco >= REFRESCO_MS) {
-    ultimoRefresco = ahora;
-    if (claveActual.length() && claveActual[0] != '_') {
-      int idx = (letras.estado == LETRA_OK) ? letras.lineaEn(progresoAhora()) : -1;
-      if (idx != lineaPintada) { lineaPintada = idx; zonaLetra(idx); }
+  if (claveActual.length() && claveActual[0] != '_') {
+    barraEstado(sonando, sonando ? VERDE_SPOTIFY : GRIS);
+
+    if (millis() - ultimoRefresco >= REFRESCO_MS) {
+      ultimoRefresco = millis();
+      CON_DATOS({
+        int idx = (letras.estado == LETRA_OK) ? letras.lineaEn(progresoAhora()) : -1;
+        if (idx != lineaPintada) { lineaPintada = idx; zonaLetra(idx); }
+      });
       barraProgreso();
     }
-  }
-  if (claveActual.length() && claveActual[0] != '_') {
     moverBarra(sonando ? VERDE_SPOTIFY : GRIS);
   }
-  delay(20);
+  delay(5);
 }

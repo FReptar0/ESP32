@@ -581,6 +581,45 @@ instante, durante el handshake TLS. Sigue holgado.
 comparables.** Mismo binario, mismo punto del ciclo, suficientes muestras.
 Detalle en [`5-investigacion/memoria-en-regimen-2.md`](5-investigacion/memoria-en-regimen-2.md).
 
+### 🧠 Las pausas del desplazamiento: eran la RED, no el texto
+
+Tras arreglar el bucle del texto, las pausas seguían. La causa real era otra:
+
+| Llamada | Bloquea |
+|---|---|
+| `consultar()` | ~1.200 ms |
+| `precargarSiguiente()` | ~3.000 ms |
+
+Ambas se hacían **dentro del mismo bucle que dibuja**. El desplazamiento avanza 1
+píxel cada 65 ms, así que una consulta de 1.200 ms se comía **18 píxeles** — y se
+consultaba cada 2 segundos.
+
+🔑 **Un síntoma puede tener varias causas.** El arreglo del bucle era correcto y
+no sobra; simplemente había una segunda causa detrás, más grande.
+
+**Solución: usar los dos núcleos del ESP32**, que hasta ahora solo usaba uno.
+
+```
+Núcleo 0  ->  internet (puede tardar lo que quiera)
+Núcleo 1  ->  dibujar, y solo dibujar (nunca se bloquea)
+```
+
+El reparto no es arbitrario: **todo el dibujo se queda en un núcleo a propósito**,
+porque la librería de pantalla no soporta que dos dibujen a la vez. Eso obligó a
+cambiar la función que consultaba Spotify — antes también pintaba; ahora solo
+actualiza datos y levanta una bandera.
+
+**El mutex** protege los datos compartidos. Y un detalle que importa: la descarga
+de la letra se hace **fuera** del mutex. Tarda segundos, y retener el turno tanto
+tiempo dejaría al otro núcleo esperando — volviendo al problema original. Se
+descarga sobre un buffer que nadie mira, y solo el intercambio final ocurre
+dentro del turno.
+
+Coste: 16 KB de pila para la tarea nueva. El mínimo histórico de RAM baja de 97 a
+71 KB, porque ahora red y dibujo pueden coincidir. Sigue holgado.
+
+Detalle en [`5-investigacion/dos-nucleos.md`](5-investigacion/dos-nucleos.md).
+
 ### 💜 Emojis, descripción de playlist y barra que se desplaza
 
 **Los emojis SÍ se pueden mostrar, pero no como imágenes.** Un emoji a 20×20 px
