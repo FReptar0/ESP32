@@ -16,6 +16,7 @@
 #include "mbedtls/base64.h"
 #include "secrets.h"
 #include "texto.h"
+#include "fuentes.h"
 #include "letras.h"
 
 extern const uint8_t rootca_crt_bundle_start[] asm("_binary_data_cert_x509_crt_bundle_bin_start");
@@ -30,14 +31,24 @@ const char* URL_TOKEN   = "https://accounts.spotify.com/api/token";
 const char* URL_CANCION = "https://api.spotify.com/v1/me/player/currently-playing";
 const char* URL_COLA    = "https://api.spotify.com/v1/me/player/queue";
 
-const unsigned long CADA_CUANTO_MS  = 5000;   // preguntar a Spotify, normal
-const unsigned long CERCA_DEL_FIN_MS = 1000;  // ...y más seguido al final de la canción
+// Cada cuánto se le pregunta a Spotify. Más seguido = detecta antes las
+// pausas y los cambios, pero se acerca al límite de peticiones (que se
+// mide en una ventana móvil de 30 s). 2 s = 15 peticiones por ventana.
+unsigned long cadaCuantoMs = 2000;            // se ajusta solo si hay 429
+const unsigned long CERCA_DEL_FIN_MS = 1000;  // al final de la canción
 const unsigned long UMBRAL_FIN_MS   = 15000;  // "final" = últimos 15 s
 const unsigned long REFRESCO_MS     = 100;    // repintar la letra
 
 // Ajuste fino del sincronismo de la letra. Positivo = la letra va por
 // delante. Si la ves atrasada, súbelo; si adelantada, bájalo.
 const long AJUSTE_LETRA_MS = 400;
+
+// Alturas de línea de las fuentes generadas (ver tools/gen-fuente.py)
+const int ALTO_GRANDE = 23, ALTO_CHICA = 15;
+
+inline void usarFuente(bool grande) {
+  tft.setFreeFont(grande ? &FuenteGrande : &FuenteChica);
+}
 
 const int CANAL_PWM = 0;
 const int BRILLO    = 140;                    // 0-255 (RNF-02)
@@ -85,21 +96,22 @@ long progresoAhora() {
 // Parte un texto en líneas que quepan a lo ancho, cortando por PALABRAS.
 // Devuelve cuántas líneas usó; si `cupoTodo` no es nulo, dice si el texto
 // entró completo o hubo que recortarlo.
-int partirEnLineas(const String& texto, int fuente, int anchoMax,
+int partirEnLineas(const String& texto, bool grande, int anchoMax,
                    String salida[], int maxLineas, bool* cupoTodo = nullptr) {
+  usarFuente(grande);
   int n = 0;
   String resto = texto;
   resto.trim();
 
   while (resto.length() > 0 && n < maxLineas) {
-    if (tft.textWidth(resto, fuente) <= anchoMax) {
+    if (tft.textWidth(resto) <= anchoMax) {
       salida[n++] = resto;
       resto = "";          // 🐛 ESTO FALTABA.
       break;               // Sin limpiar `resto`, la comprobación de más
     }                      // abajo creía que había sobrado texto y añadía
                            // "..." a frases que SÍ cabían completas.
     int corte = resto.length();
-    while (corte > 0 && tft.textWidth(resto.substring(0, corte), fuente) > anchoMax) corte--;
+    while (corte > 0 && tft.textWidth(resto.substring(0, corte)) > anchoMax) corte--;
     int esp = resto.lastIndexOf(' ', corte);
     if (esp > 0) corte = esp;              // cortar por palabra, no a media palabra
     if (corte <= 0) corte = 1;             // palabra larguísima: cortar donde sea
@@ -116,61 +128,64 @@ int partirEnLineas(const String& texto, int fuente, int anchoMax,
 // con la más chica antes de rendirse. Recortar con "..." pierde palabras
 // de la canción; encoger la letra no pierde nada.
 int partirConReserva(const String& texto, int anchoMax, String salida[],
-                     int maxLineas, int& fuenteUsada) {
+                     int maxLineas, bool& grandeUsada) {
   bool cupo = false;
-  fuenteUsada = 4;
-  int n = partirEnLineas(texto, 4, anchoMax, salida, maxLineas, &cupo);
+  grandeUsada = true;
+  int n = partirEnLineas(texto, true, anchoMax, salida, maxLineas, &cupo);
   if (cupo) return n;
 
-  fuenteUsada = 2;                       // segunda oportunidad, más chica
-  n = partirEnLineas(texto, 2, anchoMax, salida, maxLineas + 1, &cupo);
+  grandeUsada = false;                   // segunda oportunidad, más chica
+  n = partirEnLineas(texto, false, anchoMax, salida, maxLineas + 1, &cupo);
   if (cupo) return n;
 
   // Ya no hay más remedio: recortar la última línea e indicarlo.
+  usarFuente(false);
   String u = salida[n-1];
-  while (u.length() > 1 && tft.textWidth(u + "...", 2) > anchoMax)
+  while (u.length() > 1 && tft.textWidth(u + "...") > anchoMax)
     u = u.substring(0, u.length() - 1);
   salida[n-1] = u + "...";
   return n;
+}
+
+// Dibuja centrado horizontalmente con la fuente indicada.
+inline void escribir(const String& t, int y, bool grande, uint16_t color) {
+  usarFuente(grande);
+  tft.setTextColor(color, TFT_BLACK);
+  tft.setTextDatum(TC_DATUM);
+  tft.drawString(t, 120, y);
 }
 
 void barraEstado(const String& txt, uint16_t color) {
   if (estadoPintado == txt) return;
   estadoPintado = txt;
   tft.fillRect(0, 0, 240, 26, TFT_BLACK);
-  tft.setTextDatum(TL_DATUM);
+  usarFuente(false);
   tft.setTextColor(color, TFT_BLACK);
-  tft.drawString(txt, MARGEN, 6, 2);
+  tft.setTextDatum(TL_DATUM);
+  tft.drawString(txt, MARGEN, 5);
   tft.drawFastHLine(0, 27, 240, GRIS_LINEA);
 }
 
 void cabecera(const char* titulo, const char* artista) {
-  tft.fillRect(0, 30, 240, 46, TFT_BLACK);
-  tft.setTextDatum(TC_DATUM);
-  // aASCII: sin esto, "León" se vería "Len" (ver texto.h)
-  String l[2]; int f;
-  partirConReserva(aASCII(String(titulo)), ANCHO, l, 1, f);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.drawString(l[0], 120, Y_TITULO, 2);
-  partirConReserva(aASCII(String(artista)), ANCHO, l, 1, f);
-  tft.setTextColor(VERDE_SPOTIFY, TFT_BLACK);
-  tft.drawString(l[0], 120, Y_ARTISTA, 2);
+  tft.fillRect(0, 30, 240, 40, TFT_BLACK);
+  // aLatin1 conserva los acentos: la fuente generada llega al código 255.
+  String l[3]; bool g;
+  partirConReserva(aLatin1(String(titulo)), ANCHO, l, 1, g);
+  escribir(l[0], Y_TITULO, false, TFT_WHITE);
+  partirConReserva(aLatin1(String(artista)), ANCHO, l, 1, g);
+  escribir(l[0], Y_ARTISTA, false, VERDE_SPOTIFY);
   tft.drawFastHLine(MARGEN, 70, ANCHO, GRIS_LINEA);
 }
 
-// Pinta la zona de la letra: la línea que toca, grande y blanca, con la
-// anterior y la siguiente en gris tenue. Ese contexto es lo que hace que
-// se siga la canción con la vista sin esfuerzo.
-// ¿Esta línea es un silencio? Lo es si está vacía o si solo contiene
-// símbolos de nota musical (que en los .lrc marcan intros, solos y
+// ¿Esta línea es un silencio? Lo es si está vacía o si solo contiene el
+// marcador de nota musical (que en los .lrc señala intros, solos y
 // puentes instrumentales).
 bool esSilencio(const char* t) {
   if (!t || !*t) return true;
-  for (const char* p = t; *p; p++) if (*p != ' ' && *p != '~') return false;
+  for (const char* p = t; *p; p++) if (*p != ' ' && *p != MARCA_NOTA) return false;
   return true;
 }
 
-// Busca la siguiente línea CON TEXTO a partir de `desde`.
 int siguienteConTexto(int desde) {
   for (int i = (desde < 0 ? 0 : desde); i < letras.n; i++)
     if (!esSilencio(letras.lineas[i].texto)) return i;
@@ -183,8 +198,8 @@ int anteriorConTexto(int desde) {
   return -1;
 }
 
-// Dibuja una nota musical con primitivas gráficas. Las fuentes no tienen
-// el símbolo ♪, así que se pinta a mano: cabeza, palo y banderita.
+// Dibuja una nota musical con primitivas gráficas: cabeza, palo y
+// banderita. Ninguna fuente la trae, así que se pinta a mano.
 void dibujarNota(int x, int y, uint16_t color) {
   tft.fillCircle(x, y, 4, color);
   tft.drawFastVLine(x + 3, y - 15, 15, color);
@@ -193,21 +208,23 @@ void dibujarNota(int x, int y, uint16_t color) {
   tft.drawLine(x + 4, y - 12, x + 10, y - 8,  color);
 }
 
+// Dos notas, centradas horizontalmente respecto a `cx`.
+void dibujarNotas(int cx, int y, uint16_t color) {
+  dibujarNota(cx - 14, y, color);
+  dibujarNota(cx + 4,  y + 4, color);
+}
+
 void zonaLetra(int idx) {
   tft.fillRect(0, Y_LETRA, 240, ALTO_LETRA, TFT_BLACK);
-  tft.setTextDatum(TC_DATUM);
 
   if (letras.estado == LETRA_INSTRUMENTAL) {
-    tft.setTextColor(GRIS, TFT_BLACK);
-    tft.drawString("instrumental", 120, Y_LETRA + 50, 4);
-    dibujarNota(90, Y_LETRA + 30, GRIS);
-    dibujarNota(140, Y_LETRA + 34, GRIS);
+    dibujarNotas(120, Y_LETRA + 44, TFT_WHITE);
+    escribir("instrumental", Y_LETRA + 58, false, GRIS);
     return;
   }
   if (letras.estado != LETRA_OK) {
-    tft.setTextColor(GRIS_OSCURO, TFT_BLACK);
-    tft.drawString(letras.estado == LETRA_NO_HAY ? "sin letra" : "buscando letra...",
-                   120, Y_LETRA + 48, 2);
+    escribir(letras.estado == LETRA_NO_HAY ? "sin letra" : "buscando letra...",
+             Y_LETRA + 48, false, GRIS_OSCURO);
     return;
   }
 
@@ -215,66 +232,59 @@ void zonaLetra(int idx) {
 
   // ------------------------------------------------------------------
   //  SILENCIO: intro, solo instrumental o pausa entre estrofas.
-  //
-  //  Antes aquí se dejaba la pantalla en blanco, y estaba mal: durante
-  //  la intro de una canción podías estar 20 segundos mirando un hueco
-  //  negro sin saber si el aparato se había colgado.
-  //
-  //  Ahora se dibuja una nota (para que se vea que ES un tramo sin voz,
-  //  no un fallo) y DEBAJO, en gris, la frase que viene. Así se puede
-  //  seguir la canción incluso antes de que empiece a cantarse.
+  //  Se dibujan las notas EN BLANCO y CENTRADAS (ocupan el sitio de la
+  //  frase que se cantaría), y debajo en gris la frase que viene. Así se
+  //  puede seguir la canción antes de que empiece a cantarse, y queda
+  //  claro que el aparato está vivo.
   // ------------------------------------------------------------------
   if (enSilencio) {
     int sig = siguienteConTexto(idx < 0 ? 0 : idx + 1);
 
-    dibujarNota(104, Y_LETRA + 26, GRIS_OSCURO);
-    dibujarNota(128, Y_LETRA + 30, GRIS_OSCURO);
+    String s2[3]; bool g2 = false; int ns = 0;
+    if (sig >= 0) ns = partirConReserva(String(letras.lineas[sig].texto), ANCHO, s2, 2, g2);
 
-    if (sig >= 0) {
-      String s2[3]; int fs;
-      int ns = partirConReserva(String(letras.lineas[sig].texto), ANCHO, s2, 2, fs);
-      tft.setTextColor(GRIS, TFT_BLACK);
-      int alto = (fs == 4) ? 27 : 19;
-      int y = Y_LETRA + ALTO_LETRA - 8 - ns * alto;
-      for (int i = 0; i < ns; i++) tft.drawString(s2[i], 120, y + i * alto, fs);
-    }
+    // Las notas van donde iría la frase actual: en el centro del bloque.
+    int altoSig = ns * (g2 ? ALTO_GRANDE : ALTO_CHICA);
+    int yNotas  = Y_LETRA + (ALTO_LETRA - altoSig) / 2 - 6;
+    dibujarNotas(120, yNotas, TFT_WHITE);
+
+    for (int i = 0; i < ns; i++)
+      escribir(s2[i], Y_LETRA + ALTO_LETRA - 6 - altoSig + i * (g2 ? ALTO_GRANDE : ALTO_CHICA),
+               g2, GRIS);
     return;
   }
 
   // ------------------------------------------------------------------
   //  CANTANDO: la frase actual grande y blanca, con contexto en gris.
   // ------------------------------------------------------------------
-  String c[4]; int fuente = 4;
-  int n = partirConReserva(String(letras.lineas[idx].texto), ANCHO, c, 3, fuente);
+  String c[4]; bool grande = true;
+  int n = partirConReserva(String(letras.lineas[idx].texto), ANCHO, c, 3, grande);
 
-  int alto = (fuente == 4) ? 27 : 19;
+  int alto = grande ? ALTO_GRANDE : ALTO_CHICA;
   int bloque = n * alto;
   int y = Y_LETRA + (ALTO_LETRA - bloque) / 2;
 
   // El contexto solo se dibuja si sobra sitio: cuando la frase actual es
   // larga, ella manda.
-  bool hayHueco = (bloque + 42) <= ALTO_LETRA;
+  bool hayHueco = (bloque + 38) <= ALTO_LETRA;
 
   if (hayHueco) {
     int ant = anteriorConTexto(idx - 1);
     if (ant >= 0) {
-      String a[3]; int fa;
-      partirConReserva(String(letras.lineas[ant].texto), ANCHO, a, 1, fa);
-      tft.setTextColor(GRIS_OSCURO, TFT_BLACK);
-      tft.drawString(a[0], 120, Y_LETRA, 2);
+      String a[3]; bool ga;
+      partirConReserva(String(letras.lineas[ant].texto), ANCHO, a, 1, ga);
+      escribir(a[0], Y_LETRA, false, GRIS_OSCURO);
     }
   }
 
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  for (int i = 0; i < n; i++) tft.drawString(c[i], 120, y + i * alto, fuente);
+  for (int i = 0; i < n; i++) escribir(c[i], y + i * alto, grande, TFT_WHITE);
 
   if (hayHueco) {
     int sig = siguienteConTexto(idx + 1);
     if (sig >= 0) {
-      String sg[3]; int fs;
-      partirConReserva(String(letras.lineas[sig].texto), ANCHO, sg, 1, fs);
-      tft.setTextColor(GRIS, TFT_BLACK);
-      tft.drawString(sg[0], 120, Y_LETRA + ALTO_LETRA - 18, 2);
+      String sg[3]; bool gs;
+      partirConReserva(String(letras.lineas[sig].texto), ANCHO, sg, 1, gs);
+      escribir(sg[0], Y_LETRA + ALTO_LETRA - ALTO_CHICA, false, GRIS);
     }
   }
 }
@@ -291,17 +301,17 @@ void barraProgreso() {
   snprintf(a, sizeof(a), "%ld:%02ld", p / 60000, (p / 1000) % 60);
   snprintf(b, sizeof(b), "%ld:%02ld", duracionMs / 60000, (duracionMs / 1000) % 60);
   tft.fillRect(0, Y_TIEMPOS, 240, 18, TFT_BLACK);
+  usarFuente(false);
   tft.setTextColor(GRIS, TFT_BLACK);
-  tft.setTextDatum(TL_DATUM); tft.drawString(a, MARGEN, Y_TIEMPOS, 2);
-  tft.setTextDatum(TR_DATUM); tft.drawString(b, 240 - MARGEN, Y_TIEMPOS, 2);
+  tft.setTextDatum(TL_DATUM); tft.drawString(a, MARGEN, Y_TIEMPOS);
+  tft.setTextDatum(TR_DATUM); tft.drawString(b, 240 - MARGEN, Y_TIEMPOS);
 }
 
 void pantallaMensaje(const char* l1, const char* l2, uint16_t color) {
   tft.fillScreen(TFT_BLACK);
   estadoPintado = ""; lineaPintada = -2;
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextColor(color, TFT_BLACK); tft.drawString(l1, 120, 110, 4);
-  if (l2) { tft.setTextColor(GRIS, TFT_BLACK); tft.drawString(l2, 120, 145, 2); }
+  escribir(l1, 105, true, color);
+  if (l2) escribir(l2, 140, false, GRIS);
 }
 
 // ============================================================
@@ -428,7 +438,11 @@ void consultar() {
   if (cod == 401) { https.end(); renovarToken(); return; }
   if (cod == 429) {
     int e = https.header("Retry-After").toInt();
-    Serial.printf("[API] ⚠️ límite, esperando %d s\n", e);
+    // Spotify no publica su límite exacto, así que si se queja subimos
+    // el intervalo y ya no volvemos a molestarle tanto. Se autorregula.
+    cadaCuantoMs = min(cadaCuantoMs + 1000UL, 8000UL);
+    Serial.printf("[API] ⚠️ límite alcanzado: esperando %d s, intervalo -> %lu ms\n",
+                  e, cadaCuantoMs);
     https.end(); delay((e + 1) * 1000UL); return;
   }
   if (cod != 200) { Serial.printf("[API] ❌ %d\n", cod); https.end(); return; }
@@ -485,6 +499,11 @@ void setup() {
   ledcSetup(CANAL_PWM, 5000, 8); ledcAttachPin(TFT_BL, CANAL_PWM);
   ledcWrite(CANAL_PWM, BRILLO);
   tft.init(); tft.setRotation(0);
+  // El texto ya viene convertido a Latin-1 (un byte por carácter) desde
+  // aLatin1(), así que hay que apagar el decodificador UTF-8 de la
+  // librería: si no, intentaría interpretar el byte 0xF1 (ñ) como el
+  // principio de una secuencia de varios bytes y se perdería.
+  tft.setAttribute(UTF8_SWITCH, false);
 
   pantallaMensaje("Tamagotchi", "conectando al WiFi...", TFT_WHITE);
   WiFi.mode(WIFI_STA); WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -515,12 +534,12 @@ void loop() {
 
   unsigned long ahora = millis();
 
-  // Sondeo ADAPTATIVO: normalmente cada 5 s, pero en los últimos 15
-  // segundos de la canción cada 1 s. Así el cambio de canción se detecta
-  // casi al instante, sin gastar peticiones el resto del tiempo.
+  // Sondeo ADAPTATIVO: cada 2 s normalmente, y cada 1 s en los últimos 15
+  // segundos de la canción. Así se detectan rápido las pausas y los
+  // cambios manuales, sin abusar del límite de peticiones.
   long falta = duracionMs - progresoAhora();
   unsigned long intervalo = (sonando && duracionMs > 0 && falta < (long)UMBRAL_FIN_MS)
-                            ? CERCA_DEL_FIN_MS : CADA_CUANTO_MS;
+                            ? CERCA_DEL_FIN_MS : cadaCuantoMs;
 
   if (ahora - ultimaConsulta >= intervalo) { ultimaConsulta = ahora; consultar(); }
 

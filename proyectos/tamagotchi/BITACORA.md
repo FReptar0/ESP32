@@ -476,6 +476,40 @@ Ahora, durante un silencio se ve:
 Y la búsqueda de contexto **salta los silencios**: busca la anterior y la
 siguiente *con texto*, en vez de mostrar huecos.
 
+### ✅ Acentos de verdad: una fuente propia
+
+La solución anterior (quitar las tildes: `León` → `Leon`) se quedó corta. Al
+revisar el código de TFT_eSPI apareció que **sí** admite fuentes personalizadas en
+formato Adafruit GFX, y esas llegan hasta el código 255 — donde vive el español:
+
+```c
+if ((c >= pgm_read_word(&gfxFont->first)) && (c <= pgm_read_word(&gfxFont->last)))
+```
+
+Se escribió `tools/gen-fuente.py`: coge una Arial del sistema, dibuja cada
+carácter del 32 al 255 y los empaqueta en ese formato. **8.4 KB** las dos fuentes
+(19 px y 13 px).
+
+Resultado verificado con casos reales: `León Larregui`, `Como Tú`, `Cariño`,
+`The Marías`.
+
+Dos detalles que hubo que atar: el texto se convierte a **Latin-1** (1 byte por
+letra) al cargar la letra, y hay que **apagar el decodificador UTF-8 de la
+librería** — si no, vería el byte `0xF1` de la ñ y creería que empieza una
+secuencia de varios bytes.
+
+### 🎵 Notas centradas y sondeo más ágil
+
+- Las notas de los silencios ahora van **centradas y en blanco**, ocupando el
+  sitio de la frase que se cantaría, con la siguiente en gris debajo.
+- Se pregunta a Spotify **cada 2 s** en vez de cada 5, para notar antes las pausas
+  y los saltos de canción. Con **freno automático**: si Spotify responde `429`,
+  el intervalo sube solo (hasta 8 s).
+
+🔑 **Cuando un límite no está documentado, el diseño tiene que autorregularse.**
+Spotify no publica el suyo para el modo desarrollo, así que adivinar un número
+fijo sería apostar. Reaccionar a su respuesta, no.
+
 ### 🔜 En qué me quedé — siguiente sesión
 
 **Verificaciones pendientes de mirar:**

@@ -170,11 +170,11 @@ inline void Letras::parsearLRC(const char* lrc) {
         for (size_t k = 0; k < len; k++) bruto += ini[k];
         bruto.trim();
 
-        // Los acentos se convierten AQUÍ, una sola vez al cargar la
-        // letra, y no cada vez que se dibuja. Las fuentes integradas de
-        // TFT_eSPI solo tienen ASCII 32-127 y descartan lo demás en
-        // silencio: sin esto, "corazón" se vería "corazn".
-        String limpio = aASCII(bruto);
+        // La conversión UTF-8 -> Latin-1 se hace AQUÍ, una sola vez al
+        // cargar la letra, y no cada vez que se dibuja (6 veces por
+        // segundo). Los acentos se CONSERVAN: la fuente generada con
+        // tools/gen-fuente.py llega hasta el código 255.
+        String limpio = aLatin1(bruto);
         size_t l2 = limpio.length();
         if (l2 >= MAX_TEXTO) l2 = MAX_TEXTO - 1;
         memcpy(lineas[n].texto, limpio.c_str(), l2);

@@ -24,17 +24,40 @@ Y como en UTF-8 la `ó` ocupa **dos bytes**, desaparecía entera: `León` → `L
 > — Zoé` se encontró sin problema. El fallo era solo al dibujar, lo que lo hacía
 > más confuso de diagnosticar.
 
-**Solución aplicada:** convertir los acentos a su letra más parecida **al cargar
-la letra**, no al dibujarla — así se hace una vez por canción y no 6 veces por
-segundo. `León` → `Leon`.
+**Primera solución (superada):** convertir los acentos a su letra más parecida
+(`León` → `Leon`). Funcionaba y se leía bien, pero perdía las tildes.
 
-Se pierde la tilde. Es un compromiso consciente: en una pantalla de 1.3" lo que
-importa es leer la palabra.
+### ✅ Solución definitiva: una fuente propia con acentos
 
-**La alternativa, para el futuro:** TFT_eSPI soporta fuentes *smooth* (`.vlw`),
-que sí manejan Unicode completo. Requieren generar el archivo de fuente con una
-herramienta aparte y guardarlo en la memoria del ESP32. Es la vía si algún día
-los acentos importan de verdad.
+Resulta que TFT_eSPI **sí** admite fuentes personalizadas en formato Adafruit GFX,
+y esas llegan hasta el código **255** — justo donde vive el español. Se ve en su
+propio código, que usa el rango declarado por la fuente en vez de un tope fijo:
+
+```c
+if ((c >= pgm_read_word(&gfxFont->first)) && (c <= pgm_read_word(&gfxFont->last)))
+```
+
+Así que se escribió [`tools/gen-fuente.py`](../tools/gen-fuente.py), que coge una
+Arial del sistema, dibuja cada carácter del 32 al 255 y los empaqueta en ese
+formato.
+
+| | |
+|---|---|
+| Fuente grande | 19 px · 3.722 bytes de dibujos |
+| Fuente chica | 13 px · 1.715 bytes |
+| **Total en flash** | **~8.4 KB** |
+
+Barato para lo que resuelve: **`León`, `Cariño`, `Como Tú` y `The Marías` se ven
+como deben**.
+
+**Dos detalles que hubo que atar:**
+
+1. El texto se convierte de UTF-8 a **Latin-1** (de 2 bytes por letra acentuada a
+   1), porque así está indexada la fuente. Se hace al cargar la letra, una vez por
+   canción, no 6 veces por segundo al dibujar.
+2. Hay que **apagar el decodificador UTF-8 de la librería**
+   (`tft.setAttribute(UTF8_SWITCH, false)`). Si no, vería el byte `0xF1` de la ñ
+   y creería que empieza una secuencia de varios bytes.
 
 ## 2. 🐛 Se añadía "..." a frases que sí cabían
 
@@ -175,3 +198,31 @@ que el aparato está vivo y sabe lo que hace.
 Además, la búsqueda de la línea anterior y la siguiente ahora **salta los
 silencios**: busca la anterior y la siguiente *con texto*, en vez de mostrar
 huecos como contexto.
+
+
+---
+
+## 7. 🎵 Las notas de los silencios: centradas y en blanco
+
+Al ver el resultado, las notas quedaban **arriba y en gris**, cuando lo natural
+es que ocupen el sitio de la frase que se cantaría: **centradas y en blanco**,
+con la frase que viene en gris debajo.
+
+Ahora se calcula primero cuánto va a ocupar la frase siguiente, y con eso se
+centra el bloque de notas en el hueco que queda. El resultado es que durante una
+intro la pantalla se ve equilibrada en vez de descolgada hacia arriba.
+
+## 8. ⏱️ Detectar antes las pausas y los cambios manuales
+
+Se preguntaba a Spotify **cada 5 segundos**, así que darle a pausa o saltar de
+canción tardaba hasta 5 segundos en notarse. Se sentía lento.
+
+**Ahora cada 2 segundos**, que son 15 peticiones por ventana de 30 s.
+
+⚠️ El riesgo es el límite de peticiones, que Spotify **no publica** para el modo
+desarrollo. Por eso se añadió un **freno automático**: si alguna vez responde
+`429`, el intervalo sube un segundo (hasta 8 s como máximo) y ya no se le vuelve
+a molestar tanto.
+
+🔑 **Cuando un límite no está documentado, el diseño tiene que autorregularse.**
+Adivinar un número fijo es apostar; reaccionar a la respuesta del servidor, no.
