@@ -100,6 +100,42 @@ BOOT** — que es una molestia clásica en placas donde esto no funciona.
   - ⚠️ **No se conecta a redes de 5 GHz.** Y como muchos routers usan el mismo
     nombre para las dos bandas, este es un clásico de "no conecta y no sé por qué".
 
+## Cómo leer las etiquetas de la placa
+
+La serigrafía (los textos impresos junto a los pines) **no dice "GPIO"**. Cada
+fabricante lo abrevia a su manera, y todas significan lo mismo:
+
+| Lo que dice la placa | Significa |
+|---|---|
+| `P18` · `D18` · `G18` · `IO18` · `18` | **GPIO18** |
+
+O sea: **`P##` = `GPIO##`**. La letra es decoración del fabricante.
+
+### Los pines con nombre en vez de número
+
+Aquí están las trampas:
+
+| Etiqueta | Qué es en realidad | ¿Se puede usar? |
+|---|---|---|
+| `3V3` / `3.3V` | Salida de 3.3 V | ✅ Alimentar cosas de 3.3 V |
+| `GND` | Tierra (hay varios, todos iguales) | ✅ Siempre hace falta |
+| `VIN` / `5V` | Entrada de **5 V** | ⚠️ **Nunca** a un pin de datos ni al `VCC` de la pantalla |
+| `EN` / `RST` | Reset de la placa | ❌ No es un GPIO |
+| `VP` / `VN` | GPIO36 / GPIO39 | ⚠️ **Solo entrada.** No pueden encender nada |
+| `TX` / `RX` | GPIO1 / GPIO3 | ❌ Los usa el USB. Conectarles algo rompe el monitor serie |
+| `CLK` `CMD` `SD0`–`SD3` | GPIO6 a GPIO11 | 🚫 **Jamás.** Van a la memoria flash: la placa no arranca |
+
+> ### ⚠️ `VIN` está pegado a `3V3` en casi todas las placas
+>
+> Y `VIN` entrega **5 V**. Si el cable rojo va ahí en vez de a `3V3`, la pantalla
+> recibe 5 V y se puede dañar. **Cuenta dos veces antes de conectar el rojo.**
+>
+> Verificación con multímetro, si tienes: entre `3V3` y `GND` deben salir ~3.3 V.
+> Si mides ~5 V, ese pin no era el que creías.
+
+Muchas placas repiten los números en la **cara de abajo**, donde a veces se leen
+mejor.
+
 ## Conexiones
 
 ⚠️ Pendiente hasta definir la pantalla. Ver

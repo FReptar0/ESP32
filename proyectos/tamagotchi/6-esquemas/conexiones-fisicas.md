@@ -42,6 +42,17 @@ graph LR
     P7 ---|"💡 brillo (PWM)"| T7
 ```
 
+## 🔎 Antes de nada: cómo se llaman los pines en tu placa
+
+La serigrafía del ESP32 **no dice "GPIO"**. Dice `P18`, `D18`, `G18` o `IO18`
+según el fabricante. **Todas significan GPIO18.**
+
+Los cinco que hay que localizar: **P18 · P23 · P4 · P16 · P32**, más `3V3` y `GND`.
+
+⚠️ `VIN` (5 V) suele estar pegado a `3V3`. Confundirlos puede dañar la pantalla.
+Tabla completa de etiquetas y trampas en la
+[ficha del ESP32](../3-componentes/esp32-d0wd-v3.md#cómo-leer-las-etiquetas-de-la-placa).
+
 ## Tabla de conexiones
 
 | # | Pin GMT130 | Pin ESP32 | Qué hace | Color de cable sugerido |
