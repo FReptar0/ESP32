@@ -661,7 +661,23 @@ void setup() {
   claveActual = "";
 }
 
+// Latido de diagnóstico: cada 30 s imprime la memoria libre y el mínimo
+// histórico. Es la única forma de saber si hay una fuga real o solo el
+// calentamiento del heap — que baja y se aplana. Una fuga es lineal e
+// infinita; el calentamiento es asintótico. Con pocas muestras no se
+// distinguen.
+unsigned long ultimoLatido = 0;
+
 void loop() {
+  if (millis() - ultimoLatido > 30000) {
+    ultimoLatido = millis();
+    Serial.printf("[Latido] t=%lus  RAM %lu B  minimo %lu B  bloque %lu B\n",
+                  millis() / 1000,
+                  (unsigned long)ESP.getFreeHeap(),
+                  (unsigned long)ESP.getMinFreeHeap(),
+                  (unsigned long)ESP.getMaxAllocHeap());
+  }
+
   if (WiFi.status() != WL_CONNECTED) {
     if (claveActual != "__sinred__") {
       claveActual = "__sinred__";

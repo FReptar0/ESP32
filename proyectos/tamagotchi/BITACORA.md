@@ -546,6 +546,41 @@ API de Spotify es solo de consulta: no hay forma de que avise.
 conexión TLS nueva** (~1 s y ~50 KB de pico). A 2 segundos de intervalo, medio
 tiempo se va en negociar cifrado.
 
+### ✅ CORRECCIÓN: no había fuga de memoria
+
+Durante la sesión avisé de que la RAM bajaba sin parar (193 → 186 → 181 → 176 →
+173 KB) y podía ser una fuga. **Era una falsa alarma, por dos errores míos de
+medición:**
+
+**1. Comparaba firmwares distintos.** Cada número venía de una versión con más
+cosas dentro: la precarga añadió 13,7 KB de buffers, las fuentes propias 8,8 KB,
+el sprite de la barra 8 KB. Cada número era correcto para su versión; la
+*tendencia* no existía. 🔑 Es como pesarse cambiando de báscula.
+
+**2. Medía en el momento equivocado del ciclo.** Esos números se imprimían justo
+después de descargar una letra, con la conexión TLS aún ocupando memoria. Al
+medir en reposo salen 218 KB.
+
+Se añadió un **latido de diagnóstico** cada 30 s y se midió 5 minutos con el
+firmware completo:
+
+```
+t= 30s   libre 219.876   minimo 97.104   bloque mayor 110.580
+t=301s   libre 218.712   minimo 97.076   bloque mayor 110.580
+
+primera mitad -1.136 B    segunda mitad -28 B    fragmentacion: cero
+```
+
+Las últimas seis muestras varían **30 bytes entre sí**. Eso es ruido, no
+tendencia. **RNF-06 cerrado.**
+
+Y el número que de verdad importa es el **mínimo histórico: 97 KB** — el peor
+instante, durante el handshake TLS. Sigue holgado.
+
+🔑 **Antes de diagnosticar una tendencia, asegúrate de que las muestras son
+comparables.** Mismo binario, mismo punto del ciclo, suficientes muestras.
+Detalle en [`5-investigacion/memoria-en-regimen-2.md`](5-investigacion/memoria-en-regimen-2.md).
+
 ### 💜 Emojis, descripción de playlist y barra que se desplaza
 
 **Los emojis SÍ se pueden mostrar, pero no como imágenes.** Un emoji a 20×20 px
@@ -584,9 +619,9 @@ Detalle en [`5-investigacion/emojis-e-iconos.md`](5-investigacion/emojis-e-icono
 ### 🔜 En qué me quedé — siguiente sesión
 
 **Verificaciones pendientes de mirar:**
-- **¿El ajuste de 400 ms dejó la letra sincronizada?** Se afina en una constante
-- ⚠️ La RAM bajó de 186 a 180 KB en tres canciones. Puede ser el calentamiento
-  del heap ya medido (que se aplana) o algo que no se libera. Medir con calma
+- ¿Se ve bien el corazón morado de la playlist `Alo 💜`?
+- ¿La descripción se desplaza suave o da tirones?
+- ¿La fuente Avenir Next convence, o probamos Futura?
 - **La letra: ¿va sincronizada con lo que se canta?** Es lo único que no puedo
   comprobar yo
 - ¿Qué pasa con una canción sin letra en LRCLIB? Debe decir "sin letra" y seguir

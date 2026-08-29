@@ -51,7 +51,7 @@ eso es esperado, no un problema.
 | RNF-03 | Cabe en un escritorio | < 10 × 10 × 10 cm aprox. | Medir |
 | RNF-04 | El proyecto se puede recompilar dentro de un año y funciona igual | Versiones fijadas en `platformio.ini` | Ver [ADR-0001](../1-decisiones/ADR-0001-plataforma-de-desarrollo.md) |
 | RNF-05 | Las credenciales no acaban en ningún repositorio | 0 secretos en Git | `.gitignore` + revisión antes de cada commit |
-| RNF-06 | Funciona indefinidamente sin reiniciarlo a mano | > 7 días encendido sin colgarse | 🟡 Sin fugas confirmado en 31 ciclos ([medición](../5-investigacion/memoria-en-regimen.md)). Falta la prueba de 24 h |
+| RNF-06 | Funciona indefinidamente sin reiniciarlo a mano | > 7 días encendido sin colgarse | 🟢 **Sin fuga confirmado** con el firmware completo: plano en 5 min, cero fragmentación, 97 KB de margen en el peor instante ([medición](../5-investigacion/memoria-en-regimen-2.md)) |
 
 ---
 
