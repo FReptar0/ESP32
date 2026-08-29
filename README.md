@@ -22,7 +22,7 @@ ESP32/
 | Carpeta | Para qué |
 |---|---|
 | [`metodologia/`](metodologia/) | Cómo se trabaja aquí. **Léelo primero.** |
-| [`inventario/`](inventario/) | Inventario general de componentes + su bitácora |
+| [`inventario/`](inventario/) | Inventario general de componentes + su bitácora — **3 ESP32 y 4 pantallas TFT** |
 | [`proyectos/`](proyectos/) | Los proyectos |
 | [`herramientas/`](herramientas/) | `nuevo-proyecto.sh` y utilidades |
 
@@ -32,7 +32,7 @@ ESP32/
 
 | Proyecto | Qué es | Estado |
 |---|---|---|
-| [🐣 tamagotchi](proyectos/tamagotchi/) | Aparato con ESP32 que muestra qué suena en Spotify | 🔴 Bloqueado: el ESP32 no responde |
+| [🐣 tamagotchi](proyectos/tamagotchi/) | Aparato con ESP32 que muestra qué suena en Spotify | 🔴 Bloqueado: ninguna placa ESP32 es detectada por la Mac |
 
 ---
 

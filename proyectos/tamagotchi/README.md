@@ -15,23 +15,54 @@ Un aparatito de escritorio con ESP32 que muestra qué estás escuchando en Spoti
 
 ## 🚧 Bloqueante actual
 
-**La Mac no detecta el ESP32.** Todo lo demás está listo para arrancar, pero sin
-la placa no se puede avanzar en firmware.
+**Ninguna placa ESP32 aparece en la Mac.** Todo lo demás está listo, pero sin
+placa no hay firmware.
 
-Diagnóstico completo en [`BITACORA.md`](BITACORA.md). Plan de prueba, en orden —
-**haz uno, avísame, y verifico**:
+### 🎯 La prueba que hay que hacer primero
 
-1. **Confirma que la placa está enchufada** y que su LED rojo enciende.
-2. **Conéctala directo a la Mac**, no al dock DisplayLink ni a un hub.
-3. **⚠️ Cambia el cable USB.** Esta es la causa más probable con diferencia.
-   Muchos cables micro-USB son de **solo carga** y no llevan los cables de datos.
-   Usa uno que sepas que sirve para pasar archivos — por ejemplo el de un
-   celular, no el de un power bank o unos audífonos.
-4. Si tienes otra computadora a la mano, pruébala ahí para descartar la placa.
+**Conecta la C-003 — el ESP32 DEVKIT v1, el viejito de puerto mini-USB.**
 
-Después de cada intento, dime "ya" y yo corro el diagnóstico otra vez.
+Suena raro empezar por la placa más vieja, pero es la que más información da, y
+la razón es esta:
 
----
+> El estándar USB-C exige que todo aparato lleve **dos resistencias de 5.1 kΩ**
+> en unas líneas llamadas CC, para poder decirle a la computadora *"aquí estoy,
+> dame corriente"*. **Muchísimas placas ESP32 baratas con USB-C las omiten.** El
+> fabricante probó con un cable USB-A → USB-C y le funcionó — porque un puerto
+> USB-A entrega 5 V sin preguntar. Pero un puerto USB-C **no entrega nada hasta
+> que el otro lado se identifica**.
+>
+> | Cable | Qué pasa |
+> |---|---|
+> | USB-A → USB-C | ✅ Funciona |
+> | USB-C → USB-C | ❌ **Nada. Ni corriente, ni detección** |
+>
+> Tu Mac es Apple Silicon: puertos USB-C. Lo natural fue agarrar un cable C-a-C.
+> Y el síntoma encaja exacto: cero dispositivos en el árbol USB, como si no
+> hubiera nada conectado.
+
+La C-003 tiene **mini-USB**, así que por fuerza usa un cable A-a-mini y **no
+puede tener este problema**. Por eso es la prueba decisiva:
+
+- ✅ **Si aparece** → hipótesis confirmada. Se arregla con un cable USB-A → USB-C,
+  y además ya tienes una placa con la que empezar hoy mismo.
+- ❌ **Si tampoco aparece** → el problema no son las placas: es el cable (que sea
+  de solo carga) o el dock.
+
+En los dos casos sales del bloqueo sabiendo más.
+
+### Si no tienes cable mini-USB a la mano
+
+Prueba estas, en orden, con las placas USB-C:
+
+1. **Un cable USB-A → USB-C**, con la punta A en un puerto USB-A (tu dock tiene)
+   o en un adaptador A-a-C.
+2. **Que el cable sea de datos, no de solo carga.** Muchos cables (los de power
+   banks, audífonos) llevan corriente pero no datos: la placa enciende su LED y
+   la compu nunca la ve.
+3. **Directo a la Mac**, no al dock DisplayLink.
+
+Después de cada intento dime "ya" y yo corro el diagnóstico.
 
 ## Cómo está organizado
 
@@ -40,9 +71,9 @@ Las carpetas siguen las 6 fases de la
 
 | Carpeta | Qué contiene | Estado |
 |---|---|---|
-| [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟡 3 escritos, 2 sin decidir |
-| [`2-entorno/`](2-entorno/) | El entorno aislado y cómo levantarlo | 🟡 Documentado, sin instalar |
-| [`3-componentes/`](3-componentes/) | Ficha de cada pieza | 🟡 Solo el ESP32, incompleta |
+| [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟡 4 escritos, 2 sin decidir |
+| [`2-entorno/`](2-entorno/) | El entorno aislado y cómo levantarlo | 🟢 PlatformIO 6.1.19 + esptool 5.3.1 instalados |
+| [`3-componentes/`](3-componentes/) | Ficha de cada pieza | 🟡 ESP32 y GMT130, por confirmar |
 | [`4-requerimientos/`](4-requerimientos/) | Qué tiene que hacer el aparato | 🟢 Borrador listo |
 | [`5-investigacion/`](5-investigacion/) | Lo que hubo que averiguar, con fuentes | 🔴 Sin empezar |
 | [`6-esquemas/`](6-esquemas/) | El mapa: lógico y físico | 🟡 Lógico listo, físico pendiente |
@@ -55,8 +86,7 @@ Las carpetas siguen las 6 fases de la
 
 ```mermaid
 graph LR
-    A["🔌 Que el ESP32<br/>sea detectado"] --> B["⚙️ Instalar<br/>PlatformIO"]
-    B --> C["💡 Blink<br/>(¿vive la placa?)"]
+    A["🔌 Que el ESP32<br/>sea detectado"] --> C["💡 Blink<br/>(¿vive la placa?)"]
     C --> D["📡 Conectar<br/>a WiFi"]
     D --> E["🔑 Autenticar<br/>con Spotify"]
     E --> F["🎵 Leer la<br/>canción actual"]
@@ -91,6 +121,20 @@ de otro proveedor y no están disponibles desde fuera. Van a tener que salir de
 otra fuente. Está documentado en el
 [ADR-0003](1-decisiones/ADR-0003-fuente-de-las-letras.md).
 
+## 📦 Material disponible
+
+| Componente | Cant. | Para qué |
+|---|---|---|
+| ESP32-S NodeMCU (USB-C) | 2 | El cerebro. Una de repuesto |
+| ESP32 DEVKIT v1 (mini-USB) | 1 | 🎯 La placa de diagnóstico |
+| TFT IPS 1.3" GMT130, 240×240 color | 4 | La pantalla ([ADR-0004](1-decisiones/ADR-0004-pantalla-gmt130.md)) |
+
+Detalle en [`inventario/INVENTARIO.md`](../../inventario/INVENTARIO.md).
+
+**La pantalla resultó mejor de lo esperado.** El plan asumía una OLED de 0.96"
+(4 líneas de 20 caracteres). La GMT130 da del orden de 15 líneas de 30, a color.
+Eso mueve las letras (RF-04) de "probablemente inviable" a "hay que probarlo".
+
 ---
 
 ## Decisiones que te toca tomar
@@ -98,4 +142,4 @@ otra fuente. Está documentado en el
 | Qué | Dónde | Por qué depende de ti |
 |---|---|---|
 | ¿El ESP32 habla directo con Spotify, o vía un puente en la Mac? | [ADR-0002](1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) | Es un balance entre "aprendo más" y "avanzo más rápido" |
-| ¿Qué pantalla? | Futuro ADR-0004 | Depende de qué tengas y de cuánto texto haya que mostrar |
+| ~~¿Qué pantalla?~~ | [ADR-0004](1-decisiones/ADR-0004-pantalla-gmt130.md) | ✅ Resuelto: la GMT130 que ya tienes |

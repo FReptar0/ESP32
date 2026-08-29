@@ -32,20 +32,24 @@
 
 ## Componentes
 
-| ID | Componente | Categoría | Estado | Cant. | Lógica | Proyecto | Specs clave | Ubicación | Notas |
-|---|---|---|---|---|---|---|---|---|---|
-| C-001 | ESP32-S NodeMCU (genérico) | Microcontrolador | Disponible | 1 | 3.3 V | — | ESP32-WROOM-32, WiFi+BT, 38 pines (por confirmar), USB-Serial por confirmar | — | ⚠️ Aún **no detectado** por la Mac — ver LOG 2026-08-29 |
+| ID | Componente | Categoría | Estado | Cant. | Lógica | Proyecto | Specs clave | Notas |
+|---|---|---|---|---|---|---|---|---|
+| C-001 | ESP32-S NodeMCU (genérico) — **USB-C** | Microcontrolador | Disponible | 1 | 3.3 V | tamagotchi | ESP32-WROOM-32, WiFi 2.4 GHz + BT | ⚠️ **No detectado** por la Mac. Ver LOG 2026-08-29 |
+| C-002 | ESP32-S NodeMCU (genérico) — **USB-C** | Microcontrolador | Disponible | 1 | 3.3 V | — | Idéntica a C-001 | Refacción / banco de pruebas |
+| C-003 | ESP32 **DEVKIT v1** — **mini-USB** | Microcontrolador | Disponible | 1 | 3.3 V | — | ESP32-WROOM-32, 30 pines, WiFi 2.4 GHz + BT | 🎯 **La placa de diagnóstico.** Al ser mini-USB esquiva el problema de USB-C |
+| C-004 | TFT IPS 1.3" **GMT130-v1.0** | Pantalla | Disponible | **4** | 3.3 V | tamagotchi | **240×240 px, color, IPS**, controlador ST7789 (por confirmar), SPI | Excelente para este proyecto. Ficha pendiente de confirmar pines |
+
+**Resumen:** 3 microcontroladores, 4 pantallas. Material más que suficiente para el
+Tamagotchi — el bloqueante es de conexión, no de inventario.
 
 ---
 
 ## Lista de compras derivada
 
-Todo lo que esté en `Por comprar` o `A reponer` aparece aquí automáticamente
-cuando actualicemos el inventario.
-
-| ID | Componente | ¿Para qué proyecto? | Prioridad | Precio aprox. | Notas |
-|---|---|---|---|---|---|
-| — | *(vacío por ahora — se llena cuando definamos la pantalla del Tamagotchi)* | | | | |
+| ID | Componente | ¿Para qué proyecto? | Prioridad | Notas |
+|---|---|---|---|---|
+| — | Cable **USB-A → USB-C** de datos | tamagotchi | 🔴 **Alta** | Ver LOG 2026-08-29. Puede ser *la* solución al bloqueante. Casi seguro ya tienes uno de algún celular |
+| — | Protoboard + jumpers hembra-hembra | tamagotchi | 🟡 Media | Para conectar la pantalla sin soldar. Confirmar si ya tienes |
 
 ---
 
@@ -84,3 +88,7 @@ número uno de que la gente queme placas.
 
 `5 V (tolera 3.3)` significa que el componente se *alimenta* con 5 V pero entiende
 señales de 3.3 V — eso sí es seguro.
+
+> 🎉 **Buena noticia con tu material actual:** el ESP32 y la GMT130 trabajan los
+> dos a 3.3 V. Se conectan directo, sin conversor de nivel y sin riesgo de
+> quemar nada por voltaje.

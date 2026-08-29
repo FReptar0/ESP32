@@ -125,11 +125,16 @@ sin depender de nada.
 
 **Lo que hay que vigilar:**
 
-- ⚠️ **El tamaño de la pantalla va a ser el cuello de botella real, no la API.**
-  En una OLED típica de 0.96" (128×64 píxeles) caben aproximadamente 4 líneas de
-  ~20 caracteres. Un verso de una canción rara vez cabe en 20 caracteres. Esto
-  puede terminar decidiendo qué pantalla comprar — y por eso conviene tener este
-  ADR **antes** de comprarla.
+- ✅ **Actualización 2026-08-29 — el cuello de botella se alivió.** Este ADR se
+  escribió asumiendo una OLED de 0.96" (128×64), donde caben ~4 líneas de ~20
+  caracteres y un verso normal no entra. Al levantar el inventario aparecieron 4
+  pantallas **GMT130 de 240×240 a color** ([ADR-0004](ADR-0004-pantalla-gmt130.md)):
+  del orden de 15 líneas de ~30 caracteres. El RF-04 pasa de "probablemente
+  inviable" a "hay que probarlo", y por eso subió de prioridad `Podría` a
+  `Debería`.
+  ⚠️ Queda un riesgo distinto: 240 píxeles en 1.3 pulgadas son píxeles diminutos.
+  El texto puede verse nítido y aun así **no leerse** a 60 cm (RNF-01). Eso se
+  mide con la pantalla enfrente, no en el papel.
 - La cobertura de LRCLIB para tu música en concreto. Vale la pena probar a mano,
   desde el navegador, con 5 canciones que sí escuches, antes de programar nada.
 - Que el desfase de sincronización se mantenga tolerable. El `progress_ms` de

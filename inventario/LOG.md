@@ -45,6 +45,50 @@ por mi cuenta.
 
 # Historial
 
+## 2026-08-29 — `NOTA` — Nueva hipótesis sobre por qué C-001 no se detecta
+
+- **Qué pasó:** Al declarar el inventario salió un dato clave: **C-001 y C-002
+  tienen puerto USB-C**. Eso abre una hipótesis nueva y muy probable que no
+  estaba sobre la mesa en el primer diagnóstico.
+- **Estado:** sin cambios
+- **Proyecto:** tamagotchi
+- **Nota:** Muchísimas placas ESP32 baratas con USB-C **omiten dos resistencias
+  de 5.1 kΩ** que el estándar USB-C exige en las líneas CC. Sin ellas, una
+  computadora con puertos USB-C **no reconoce que hay algo conectado** y ni
+  siquiera le entrega corriente por un cable C-a-C. La misma placa funciona
+  perfecto con un cable A-a-C. El síntoma coincide exactamente con lo observado:
+  cero enumeración, dispositivo invisible.
+  **Prueba decisiva:** usar la C-003 (DEVKIT v1, mini-USB), que por su conector
+  no puede tener este problema. Si esa sí aparece, la hipótesis queda confirmada
+  y el bloqueante se resuelve con un cable, no con una placa nueva.
+
+## 2026-08-29 — `ALTA` — TFT IPS 1.3" GMT130-v1.0 (C-004) ×4
+
+- **Qué pasó:** Se registran 4 pantallas TFT que ya tenías.
+- **Estado:** — → `Disponible`
+- **Proyecto:** una se reservará para el tamagotchi
+- **Nota:** 240×240 píxeles, IPS, a color. Es **muy superior** a la OLED de 0.96"
+  que se había supuesto: en una OLED caben ~4 líneas de 20 caracteres; aquí caben
+  del orden de 15 líneas de ~30. Eso cambia por completo la viabilidad de mostrar
+  letras (RF-04) y hace pensable mostrar la portada del álbum más adelante.
+  Tener 4 unidades quita presión: se puede experimentar sin miedo a quemar la única.
+
+## 2026-08-29 — `ALTA` — ESP32 DEVKIT v1, mini-USB (C-003)
+
+- **Qué pasó:** Se registra una tercera placa, más vieja, con puerto mini-USB.
+- **Estado:** — → `Disponible`
+- **Proyecto:** — (se usará para diagnóstico)
+- **Nota:** 🎯 Esta es la pieza más valiosa del inventario **hoy mismo**. Al no
+  ser USB-C, permite descartar de un solo intento la hipótesis del cable/CC.
+
+## 2026-08-29 — `ALTA` — ESP32-S NodeMCU USB-C (C-002)
+
+- **Qué pasó:** Se registra una segunda placa idéntica a C-001.
+- **Estado:** — → `Disponible`
+- **Proyecto:** —
+- **Nota:** Sirve de refacción y de control experimental: si C-001 no aparece
+  pero C-002 sí con el mismo cable, C-001 está dañada.
+
 ## 2026-08-29 — `NOTA` — ESP32-S NodeMCU (C-001)
 
 - **Qué pasó:** Primer intento de detectar la placa desde la Mac (macOS 26.5.2,

@@ -122,6 +122,39 @@ Resumen: no aparece ningún chip USB-Serie en el árbol USB del sistema, y no ex
 ningún `/dev/cu.usbserial*`. Todo el hardware USB visible pertenece al dock
 DisplayLink.
 
+> ### ⚠️ Las resistencias que le faltan a muchas placas ESP32 con USB-C
+>
+> **Esta es la hipótesis principal de por qué no se detecta.**
+>
+> El estándar USB-C exige que todo aparato que reciba corriente lleve **dos
+> resistencias de 5.1 kΩ** en unas líneas llamadas **CC** (*Configuration
+> Channel*). Sirven para que el aparato le diga a la computadora *"aquí hay algo,
+> y necesita energía"*.
+>
+> Un montón de placas ESP32 baratas con USB-C **no traen esas resistencias**. Los
+> fabricantes las omiten porque en su momento probaron con un cable USB-A → USB-C
+> y funcionó — y funciona, porque un puerto USB-A **siempre** entrega 5 V sin
+> preguntar nada.
+>
+> Pero un puerto USB-C **no entrega nada hasta que el otro lado se identifica**.
+> Sin las resistencias, la placa nunca se identifica. Resultado:
+>
+> | Cable | Qué pasa |
+> |---|---|
+> | USB-A → USB-C | ✅ Funciona perfecto |
+> | USB-C → USB-C | ❌ **Muerta. Ni corriente, ni enumeración, ni nada** |
+>
+> Y el síntoma coincide **exactamente** con lo observado: cero dispositivos en el
+> árbol USB, como si no hubiera nada conectado. Desde el lado de la Mac, en efecto,
+> no hay nada conectado.
+>
+> Tu Mac es Apple Silicon: sus puertos son USB-C, así que lo natural es haber
+> agarrado un cable C-a-C. Encaja.
+>
+> **Cómo confirmarlo:** conectar la **C-003 (DEVKIT v1)**, que tiene mini-USB y
+> por tanto usa por fuerza un cable A-a-mini. Si esa sí aparece, la hipótesis
+> queda confirmada y el arreglo cuesta un cable, no una placa.
+
 ## Notas y sorpresas
 
 *(Se va llenando conforme lo usemos.)*
