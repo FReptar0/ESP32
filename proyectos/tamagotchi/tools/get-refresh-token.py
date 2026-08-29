@@ -55,6 +55,7 @@ SCOPES = {
     "user-read-currently-playing": "Ver qué canción suena (RF-01 a RF-04)",
     "user-read-playback-state":    "Ver el estado completo: aparatos, volumen, shuffle",
     "user-modify-playback-state":  "CONTROLAR: play, pausa, siguiente, volumen",
+    "playlist-read-private":       "Ver el nombre de tus playlists privadas",
 
     # --- Solo para el Web Playback SDK, que corre en un NAVEGADOR ---
     # El SDK no puede correr en el ESP32 (es JavaScript y necesita DRM).
@@ -68,7 +69,8 @@ PERFILES = {
     # Lo que va dentro del ESP32: leer + controlar. Sin los del SDK.
     "esp32": ["user-read-currently-playing",
               "user-read-playback-state",
-              "user-modify-playback-state"],
+              "user-modify-playback-state",
+              "playlist-read-private"],
     # Todo, para cuando montes la página con Web Playback SDK.
     "completo": list(SCOPES.keys()),
     # Mínimo absoluto: solo leer. El más seguro si algún día lo quieres así.

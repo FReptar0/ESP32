@@ -510,6 +510,42 @@ secuencia de varios bytes.
 Spotify no publica el suyo para el modo desarrollo, así que adivinar un número
 fijo sería apostar. Reaccionar a su respuesta, no.
 
+### 🎨 La playlist arriba, y fuente estilo Spotify
+
+**La barra de arriba muestra ahora la playlist** en vez de "SONANDO", que era
+redundante: si suena o no ya se ve en el color de la barra de progreso.
+
+El endpoint de "reproduciendo ahora" trae un campo `context` con el origen, pero
+**solo el identificador, no el nombre**. Hay que pedirlo aparte a
+`/v1/playlists/{id}?fields=name` — y se guarda, porque mientras sigas en la misma
+playlist no cambia. Ese `?fields=name` es importante: sin él, Spotify mandaría la
+playlist entera con todas sus canciones.
+
+Verificado: `[Contexto] playlist -> "for you" (HTTP 200)`.
+
+⚠️ Si alguna playlist privada no resuelve el nombre, hace falta el permiso
+`playlist-read-private`. Ya se añadió al perfil `esp32` del script de OAuth;
+basta con volver a correrlo.
+
+Se añadieron también **símbolos de play y pausa dibujados a mano** (triángulo y
+dos barras) a la derecha de la barra, porque ninguna fuente los trae.
+
+**Fuente cambiada a Avenir Next Demi Bold**, que es lo más parecido en macOS a la
+*Circular* de Spotify (propietaria, no distribuible). Misma familia geométrica.
+8.8 KB las dos.
+
+### 📊 Sobre el "tiempo real"
+
+Se documentó el análisis completo en
+[`5-investigacion/cuan-en-tiempo-real.md`](5-investigacion/cuan-en-tiempo-real.md).
+Resumen: la barra de progreso y la letra **ya son tiempo real** porque se calculan
+con el reloj interno. Lo que cuesta son los *eventos* (pausa, saltos), porque la
+API de Spotify es solo de consulta: no hay forma de que avise.
+
+🔑 El techo real no es el límite de peticiones, sino que **cada consulta abre una
+conexión TLS nueva** (~1 s y ~50 KB de pico). A 2 segundos de intervalo, medio
+tiempo se va en negociar cifrado.
+
 ### 🔜 En qué me quedé — siguiente sesión
 
 **Verificaciones pendientes de mirar:**

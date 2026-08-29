@@ -36,15 +36,18 @@
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-TTF_GRANDE = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
-TTF_CHICA  = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+# Avenir Next Demi Bold: geométrica-humanista, es lo más parecido que hay
+# en macOS a la "Circular" que usa Spotify (que es propietaria y no se
+# puede distribuir). El índice 2 dentro del .ttc es la variante Demi Bold.
+TTF        = "/System/Library/Fonts/Avenir Next.ttc"
+INDICE_TTF = 2
 
 PRIMERO, ULTIMO = 0x20, 0xFF          # espacio .. ÿ  (cubre todo el español)
 SALIDA = Path(__file__).resolve().parent.parent / "firmware" / "src" / "fuentes.h"
 
 
-def generar(nombre, ruta_ttf, tam):
-    fuente = ImageFont.truetype(ruta_ttf, tam)
+def generar(nombre, ruta_ttf, tam, indice=0):
+    fuente = ImageFont.truetype(ruta_ttf, tam, index=indice)
     ascent, descent = fuente.getmetrics()
 
     bitmaps, glifos = [], []
@@ -91,7 +94,7 @@ def generar(nombre, ruta_ttf, tam):
 
     alto_linea = ascent + descent
 
-    out = [f"// {nombre}: {ruta_ttf.split('/')[-1]} a {tam}px, códigos "
+    out = [f"// {nombre}: {fuente.getname()[0]} {fuente.getname()[1]} a {tam}px, códigos "
            f"0x{PRIMERO:02X}-0x{ULTIMO:02X} (incluye ñ, tildes y ¿¡)",
            f"const uint8_t {nombre}Bitmaps[] PROGMEM = {{"]
     for i in range(0, len(bitmaps), 16):
@@ -114,8 +117,8 @@ def generar(nombre, ruta_ttf, tam):
 print(__doc__)
 partes = ["#pragma once", "// GENERADO por tools/gen-fuente.py — no editar a mano.", ""]
 total = 0
-for nombre, ttf, tam in [("FuenteGrande", TTF_GRANDE, 19), ("FuenteChica", TTF_CHICA, 13)]:
-    txt, n, alto = generar(nombre, ttf, tam)
+for nombre, tam in [("FuenteGrande", 20), ("FuenteChica", 14)]:
+    txt, n, alto = generar(nombre, TTF, tam, INDICE_TTF)
     partes.append(txt)
     total += n
     print(f"  {nombre:<14} {tam:>2}px · alto de línea {alto:>2}px · {n:>6,} bytes de dibujos")

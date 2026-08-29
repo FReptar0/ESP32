@@ -30,6 +30,7 @@ String clavePrecarga;
 const char* URL_TOKEN   = "https://accounts.spotify.com/api/token";
 const char* URL_CANCION = "https://api.spotify.com/v1/me/player/currently-playing";
 const char* URL_COLA    = "https://api.spotify.com/v1/me/player/queue";
+const char* URL_PLAYLIST = "https://api.spotify.com/v1/playlists/";
 
 // Cada cuánto se le pregunta a Spotify. Más seguido = detecta antes las
 // pausas y los cambios, pero se acerca al límite de peticiones (que se
@@ -44,7 +45,7 @@ const unsigned long REFRESCO_MS     = 100;    // repintar la letra
 const long AJUSTE_LETRA_MS = 400;
 
 // Alturas de línea de las fuentes generadas (ver tools/gen-fuente.py)
-const int ALTO_GRANDE = 23, ALTO_CHICA = 15;
+const int ALTO_GRANDE = 28, ALTO_CHICA = 20;
 
 inline void usarFuente(bool grande) {
   tft.setFreeFont(grande ? &FuenteGrande : &FuenteChica);
@@ -61,8 +62,8 @@ const uint16_t GRIS_LINEA    = 0x2104;
 
 // --- Distribución de la pantalla (240x240) ---
 const int MARGEN = 8, ANCHO = 240 - 16;
-const int Y_TITULO = 30, Y_ARTISTA = 50;
-const int Y_LETRA = 76, ALTO_LETRA = 114;
+const int Y_TITULO = 32, Y_ARTISTA = 52;
+const int Y_LETRA = 78, ALTO_LETRA = 112;
 const int Y_BARRA = 196, Y_TIEMPOS = 214;
 
 String accessToken;
@@ -77,6 +78,8 @@ long  progresoBase = 0, duracionMs = 0;
 unsigned long instanteBase = 0;
 bool  sonando = false;
 bool  colaPedida = false;
+String contextoUri;        // de dónde sale la música: playlist, álbum, artista...
+String nombreContexto;     // el nombre legible, para la barra de arriba
 
 int  lineaPintada = -2;
 unsigned long ultimaConsulta = 0, ultimoRefresco = 0;
@@ -155,14 +158,34 @@ inline void escribir(const String& t, int y, bool grande, uint16_t color) {
   tft.drawString(t, 120, y);
 }
 
-void barraEstado(const String& txt, uint16_t color) {
-  if (estadoPintado == txt) return;
-  estadoPintado = txt;
+// Símbolos de reproducción dibujados a mano: un triángulo para "play",
+// dos barras para "pausa". Ninguna fuente los trae.
+void dibujarPlayPausa(int x, int y, bool reproduciendo, uint16_t color) {
+  if (reproduciendo) tft.fillTriangle(x, y - 6, x, y + 6, x + 10, y, color);
+  else { tft.fillRect(x, y - 6, 4, 12, color); tft.fillRect(x + 6, y - 6, 4, 12, color); }
+}
+
+// Arriba va DE DÓNDE sale la música (la playlist), no un "SONANDO"
+// redundante: si está sonando o no ya se ve en el símbolo de la derecha
+// y en el color de la barra de progreso.
+void barraEstado(const String& txt, bool reproduciendo, uint16_t color) {
+  String clave = txt + (reproduciendo ? "|1" : "|0");
+  if (estadoPintado == clave) return;
+  estadoPintado = clave;
+
   tft.fillRect(0, 0, 240, 26, TFT_BLACK);
   usarFuente(false);
   tft.setTextColor(color, TFT_BLACK);
   tft.setTextDatum(TL_DATUM);
-  tft.drawString(txt, MARGEN, 5);
+
+  // El nombre se recorta si no cabe, dejando sitio al símbolo.
+  String t = txt;
+  while (t.length() > 1 && tft.textWidth(t) > ANCHO - 26)
+    t = t.substring(0, t.length() - 1);
+  if (t != txt && t.length() > 1) t = t.substring(0, t.length() - 1) + "...";
+  tft.drawString(t, MARGEN, 4);
+
+  dibujarPlayPausa(240 - MARGEN - 11, 12, reproduciendo, color);
   tft.drawFastHLine(0, 27, 240, GRIS_LINEA);
 }
 
@@ -341,6 +364,64 @@ bool renovarToken() {
 }
 
 // ============================================================
+//  De dónde sale la música (playlist, álbum, artista)
+// ============================================================
+//  El endpoint de "reproduciendo ahora" trae un campo `context` con
+//  el ORIGEN de la reproducción, pero solo su identificador:
+//
+//      "context": { "type": "playlist",
+//                   "uri":  "spotify:playlist:37i9dQZF1DX..." }
+//
+//  El NOMBRE no viene. Hay que pedirlo aparte, una sola vez por
+//  contexto — y se guarda, porque mientras sigas en la misma playlist
+//  no cambia.
+void resolverContexto(const char* uri, const char* tipo) {
+  if (!uri || !*uri) {                    // canción suelta, sin contexto
+    if (contextoUri != "") { contextoUri = ""; nombreContexto = ""; estadoPintado = ""; }
+    return;
+  }
+  if (contextoUri == uri) return;         // ya lo tenemos resuelto
+
+  contextoUri = uri;
+  nombreContexto = "";
+  estadoPintado = "";                     // forzar repintado de la barra
+
+  String u = String(uri);
+  int corte = u.lastIndexOf(':');
+  String id = (corte >= 0) ? u.substring(corte + 1) : "";
+  String t = String(tipo ? tipo : "");
+
+  if (t == "playlist" && id.length()) {
+    WiFiClientSecure cli; cli.setCACertBundle(rootca_crt_bundle_start);
+    HTTPClient https;
+    // ?fields=name le pide a Spotify que devuelva SOLO el nombre. Sin
+    // eso mandaría la playlist entera: cientos de KB de canciones.
+    if (!https.begin(cli, String(URL_PLAYLIST) + id + "?fields=name")) return;
+    https.addHeader("Authorization", "Bearer " + accessToken);
+    int cod = https.GET();
+    if (cod == 200) {
+      JsonDocument doc;
+      if (!deserializeJson(doc, https.getStream()))
+        nombreContexto = String((const char*)(doc["name"] | ""));
+    } else if (cod == 403 || cod == 404) {
+      // Playlist privada: leerla exige el permiso playlist-read-private,
+      // que no se pidió. Se puede añadir volviendo a correr
+      // tools/get-refresh-token.py. Mientras tanto, no es un fallo:
+      // simplemente se muestra el tipo.
+      nombreContexto = "Playlist";
+    }
+    https.end();
+    Serial.printf("[Contexto] playlist -> \"%s\" (HTTP %d)\n", nombreContexto.c_str(), cod);
+  } else if (t == "album") {
+    nombreContexto = "Album";
+  } else if (t == "artist") {
+    nombreContexto = "Artista";
+  } else if (t == "collection") {
+    nombreContexto = "Tus me gusta";
+  }
+}
+
+// ============================================================
 //  Precarga: descargar la letra de la SIGUIENTE canción
 // ============================================================
 //  Sin esto, al cambiar de canción hay que ir a Spotify Y a LRCLIB
@@ -451,12 +532,15 @@ void consultar() {
   filtro["is_playing"] = true; filtro["progress_ms"] = true;
   filtro["item"]["name"] = true; filtro["item"]["duration_ms"] = true;
   filtro["item"]["album"]["name"] = true; filtro["item"]["artists"][0]["name"] = true;
+  filtro["context"]["uri"] = true; filtro["context"]["type"] = true;
 
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, https.getStream(),
                                              DeserializationOption::Filter(filtro));
   https.end();
   if (err) { Serial.printf("[API] ❌ JSON: %s\n", err.c_str()); return; }
+
+  resolverContexto(doc["context"]["uri"] | "", doc["context"]["type"] | "");
 
   const char* titulo  = doc["item"]["name"] | "(sin título)";
   const char* album   = doc["item"]["album"]["name"] | "";
@@ -489,7 +573,9 @@ void consultar() {
     }
     lineaPintada = -2;                  // forzar repintado con la letra ya cargada
   }
-  barraEstado(sonando ? "SONANDO" : "EN PAUSA", sonando ? VERDE_SPOTIFY : GRIS);
+  String arriba = nombreContexto.length() ? aLatin1(nombreContexto)
+                                          : String(sonando ? "Reproduciendo" : "En pausa");
+  barraEstado(arriba, sonando, sonando ? VERDE_SPOTIFY : GRIS);
 }
 
 // ============================================================
