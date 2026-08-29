@@ -139,3 +139,52 @@ los emojis desconocidos. Dos ventajas:
 - Es redondo y se ve, aunque sea pequeño.
 - El icono ya mide 15 px de ancho con el punto centrado, así que **el aire a los
   lados sale gratis** — que era el otro problema: la descripción quedaba pegada.
+
+
+## El desplazamiento: qué se mueve y qué no
+
+Primera versión: se desplazaba **toda** la barra, nombre incluido. Mal — al rato
+perdías de vista en qué playlist estabas.
+
+**Ahora el nombre se queda quieto** a la izquierda, y solo la descripción se
+mueve en el espacio que sobra tras el punto separador.
+
+### Cómo se pinta sin recortar nada a mano
+
+El orden es el truco:
+
+1. Se dibuja la descripción desplazada — puede invadir la zona del nombre.
+2. Se **tapa** esa zona con un rectángulo negro.
+3. Se pinta el nombre encima.
+
+Así el nombre nunca aparece pisado, y no hace falta calcular recortes.
+
+### El bucle continuo, sin pausas
+
+La primera versión tenía un defecto: cuando el texto se iba por la izquierda,
+quedaba un rato en blanco antes de reaparecer. Se percibía como una pausa.
+
+**La solución es dibujar la descripción dos veces**, separadas por un hueco fijo,
+y desplazar con módulo:
+
+```
+posición = desplazamiento % (ancho + hueco)
+copia 1 en:  x - posición
+copia 2 en:  x - posición + ancho + hueco
+```
+
+Cuando la primera copia se va por la izquierda, **la segunda ya está entrando por
+la derecha**. Nunca hay un instante vacío, así que el movimiento se percibe como
+un flujo continuo en vez de un ciclo que se reinicia.
+
+### La velocidad
+
+**Un píxel cada 65 ms ≈ 15 px/s.** Lento y constante, que es como se lee cómodo.
+Más rápido cansa la vista; a tirones, molesta más que si no se moviera.
+
+### Y un límite al nombre
+
+El nombre no puede ocupar más del **55%** de la barra. Si es larguísimo se
+recorta, para que la descripción siempre tenga sitio donde moverse. Sin ese tope,
+una playlist con nombre kilométrico dejaría la descripción sin espacio y el
+desplazamiento no se vería.

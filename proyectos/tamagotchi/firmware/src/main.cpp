@@ -90,10 +90,21 @@ String descContexto;       // la descripción de la playlist
 TFT_eSprite barraSpr = TFT_eSprite(&tft);
 const int BARRA_ANCHO = 240 - MARGEN * 2 - 20;   // dejando sitio al play/pausa
 const int BARRA_ALTO  = 20;
+// La barra tiene dos zonas: el nombre de la playlist se queda QUIETO a la
+// izquierda, y solo la descripción se desplaza en el espacio que sobra.
+// Moverlo todo hacía perder de vista de qué playlist se trataba.
+int  xDescripcion   = 0;    // dónde empieza la zona que se mueve
+int  anchoZonaDesc  = 0;    // cuánto espacio tiene para moverse
+int  anchoDesc      = 0;    // cuánto mide la descripción
+int  cicloDesc      = 0;    // ancho + hueco: cada cuánto se repite
 int  desplazamiento = 0;
-int  anchoContenido = 0;
 bool hayQueDesplazar = false;
 unsigned long ultimoDesplaz = 0;
+
+// Velocidad: un píxel cada 65 ms ≈ 15 px/s. Lento y constante, que es
+// como se lee cómodo. Más rápido cansa; a tirones, molesta.
+const unsigned long MS_POR_PIXEL = 65;
+const int HUECO_BUCLE = 40;   // separación entre el final y el reinicio
 
 int  lineaPintada = -2;
 unsigned long ultimaConsulta = 0, ultimoRefresco = 0;
@@ -179,31 +190,35 @@ void dibujarPlayPausa(int x, int y, bool reproduciendo, uint16_t color) {
   else { tft.fillRect(x, y - 6, 4, 12, color); tft.fillRect(x + 6, y - 6, 4, 12, color); }
 }
 
-// Pinta el contenido de la barra (nombre + descripción) dentro del sprite,
-// desplazado `off` píxeles a la izquierda.
+// Pinta la barra: la descripción desplazada, y encima el nombre fijo.
+//
+// El orden importa. Primero se dibuja la descripción, que puede invadir
+// la zona del nombre al desplazarse; después se tapa esa zona y se pinta
+// el nombre encima. Así el nombre nunca se ve pisado, y no hace falta
+// recortar nada a mano.
 void pintarContenidoBarra(int off, uint16_t colorNombre) {
   barraSpr.fillSprite(TFT_BLACK);
   barraSpr.setFreeFont(&FuenteChica);
-  int x = -off;
-  x += dibujarMixto(barraSpr, nombreContexto, x, 2, colorNombre);
+
   if (descContexto.length()) {
-    // La descripción va en un tono más apagado, separada por un punto:
-    // se lee como información secundaria sin competir con el nombre.
-    x += dibujarMixto(barraSpr, SEPARADOR, x, 2, GRIS);
-    x += dibujarMixto(barraSpr, descContexto, x, 2, GRIS);
-  }
-  // Si el texto se desplaza, se repite tras un hueco para que el bucle
-  // se vea continuo en vez de dar un salto brusco al reiniciarse.
-  if (hayQueDesplazar) {
-    int x2 = x + 30;
-    if (x2 < BARRA_ANCHO) {
-      x2 += dibujarMixto(barraSpr, nombreContexto, x2, 2, colorNombre);
-      if (descContexto.length()) {
-        x2 += dibujarMixto(barraSpr, SEPARADOR, x2, 2, GRIS);
-        dibujarMixto(barraSpr, descContexto, x2, 2, GRIS);
-      }
+    if (hayQueDesplazar) {
+      // Bucle continuo: se dibuja la descripción DOS veces, separadas por
+      // un hueco fijo. Cuando la primera copia se va por la izquierda, la
+      // segunda ya está entrando por la derecha — nunca hay un momento en
+      // blanco, así que no se percibe ningún salto ni pausa.
+      int o = off % cicloDesc;
+      dibujarMixto(barraSpr, descContexto, xDescripcion - o, 2, GRIS);
+      dibujarMixto(barraSpr, descContexto, xDescripcion - o + cicloDesc, 2, GRIS);
+    } else {
+      dibujarMixto(barraSpr, descContexto, xDescripcion, 2, GRIS);
     }
   }
+
+  // Tapar la zona fija y pintar encima el nombre + el separador.
+  barraSpr.fillRect(0, 0, xDescripcion, BARRA_ALTO, TFT_BLACK);
+  int x = dibujarMixto(barraSpr, nombreContexto, 0, 2, colorNombre);
+  if (descContexto.length()) dibujarMixto(barraSpr, SEPARADOR, x, 2, GRIS);
+
   barraSpr.pushSprite(MARGEN, 4);
 }
 
@@ -212,10 +227,21 @@ void barraEstado(bool reproduciendo, uint16_t color) {
   if (estadoPintado != clave) {
     estadoPintado = clave;
     barraSpr.setFreeFont(&FuenteChica);
-    anchoContenido = anchoMixto(barraSpr, nombreContexto);
-    if (descContexto.length())
-      anchoContenido += anchoMixto(barraSpr, SEPARADOR) + anchoMixto(barraSpr, descContexto);
-    hayQueDesplazar = anchoContenido > BARRA_ANCHO;
+
+    // El nombre no puede comerse toda la barra: se le deja como mucho el
+    // 55%, para que la descripción tenga sitio donde moverse.
+    int topeNombre = (BARRA_ANCHO * 55) / 100;
+    while (nombreContexto.length() > 1 &&
+           anchoMixto(barraSpr, nombreContexto) > topeNombre)
+      nombreContexto = nombreContexto.substring(0, nombreContexto.length() - 1);
+
+    int anchoNombre = anchoMixto(barraSpr, nombreContexto);
+    xDescripcion = anchoNombre + (descContexto.length() ? anchoMixto(barraSpr, SEPARADOR) : 0);
+    anchoZonaDesc = BARRA_ANCHO - xDescripcion;
+    anchoDesc = descContexto.length() ? anchoMixto(barraSpr, descContexto) : 0;
+
+    hayQueDesplazar = (anchoDesc > anchoZonaDesc);
+    cicloDesc = anchoDesc + HUECO_BUCLE;
     desplazamiento = 0;
 
     tft.fillRect(0, 0, 240, 27, TFT_BLACK);
@@ -226,14 +252,14 @@ void barraEstado(bool reproduciendo, uint16_t color) {
 }
 
 // Avanza el desplazamiento. Se llama desde el bucle principal, no desde
-// las consultas: así se mueve suave aunque no haya novedades de Spotify.
+// las consultas a Spotify: así se mueve a ritmo constante aunque no haya
+// novedades.
 void moverBarra(uint16_t color) {
   if (!hayQueDesplazar) return;
   unsigned long ahora = millis();
-  if (ahora - ultimoDesplaz < 40) return;      // ~25 fotogramas por segundo
+  if (ahora - ultimoDesplaz < MS_POR_PIXEL) return;
   ultimoDesplaz = ahora;
-  desplazamiento++;
-  if (desplazamiento > anchoContenido + 30) desplazamiento = 0;
+  desplazamiento = (desplazamiento + 1) % cicloDesc;
   pintarContenidoBarra(desplazamiento, color);
 }
 
