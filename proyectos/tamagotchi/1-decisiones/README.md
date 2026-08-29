@@ -10,6 +10,7 @@ con su razonamiento original intacto.
 | [0002](ADR-0002-como-obtener-datos-de-spotify.md) | El ESP32 habla **directo** con Spotify, sin puente | ✅ `Aceptado` | 2026-08-29 |
 | [0003](ADR-0003-fuente-de-las-letras.md) | De dónde salen las letras | ⚠️ `Propuesto` | 2026-08-29 |
 | [0004](ADR-0004-pantalla-gmt130.md) | Usar la TFT IPS 1.3" GMT130 (240×240) | ✅ `Aceptado` | 2026-08-29 |
+| [0008](ADR-0008-libreria-de-pantalla.md) | Usar `TFT_eSPI`, configurada desde `platformio.ini` | ✅ `Aceptado` | 2026-08-29 |
 | [0009](ADR-0009-certificados-raiz.md) | Incrustar el paquete de CAs de Mozilla, no un certificado suelto | ✅ `Aceptado` | 2026-08-29 |
 | [0010](ADR-0010-permisos-de-spotify.md) | Pedir permisos de lectura **y control** desde el inicio | ✅ `Aceptado` | 2026-08-29 |
 
@@ -23,7 +24,6 @@ suficiente:
 | ADR-0005 | Alimentación: ¿USB o batería? | Definir si el aparato se mueve de lugar o vive enchufado |
 | ADR-0006 | Cómo se guardan las credenciales de WiFi y Spotify | ✅ Resuelto en la práctica: `secrets.h` + `.gitignore` |
 | ADR-0007 | Cómo se interactúa con el Tamagotchi (botones, encoder, touch) | Definir qué hace además de mostrar la canción |
-| ADR-0008 | Qué librería usar para la pantalla (`TFT_eSPI` vs `Adafruit_ST7789`) | 🟢 Desbloqueado — ST7789 confirmado. Es el siguiente |
 
 ---
 
