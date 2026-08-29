@@ -161,13 +161,47 @@ void cabecera(const char* titulo, const char* artista) {
 // Pinta la zona de la letra: la línea que toca, grande y blanca, con la
 // anterior y la siguiente en gris tenue. Ese contexto es lo que hace que
 // se siga la canción con la vista sin esfuerzo.
+// ¿Esta línea es un silencio? Lo es si está vacía o si solo contiene
+// símbolos de nota musical (que en los .lrc marcan intros, solos y
+// puentes instrumentales).
+bool esSilencio(const char* t) {
+  if (!t || !*t) return true;
+  for (const char* p = t; *p; p++) if (*p != ' ' && *p != '~') return false;
+  return true;
+}
+
+// Busca la siguiente línea CON TEXTO a partir de `desde`.
+int siguienteConTexto(int desde) {
+  for (int i = (desde < 0 ? 0 : desde); i < letras.n; i++)
+    if (!esSilencio(letras.lineas[i].texto)) return i;
+  return -1;
+}
+
+int anteriorConTexto(int desde) {
+  for (int i = desde; i >= 0; i--)
+    if (!esSilencio(letras.lineas[i].texto)) return i;
+  return -1;
+}
+
+// Dibuja una nota musical con primitivas gráficas. Las fuentes no tienen
+// el símbolo ♪, así que se pinta a mano: cabeza, palo y banderita.
+void dibujarNota(int x, int y, uint16_t color) {
+  tft.fillCircle(x, y, 4, color);
+  tft.drawFastVLine(x + 3, y - 15, 15, color);
+  tft.drawFastVLine(x + 4, y - 15, 15, color);
+  tft.drawLine(x + 4, y - 15, x + 10, y - 11, color);
+  tft.drawLine(x + 4, y - 12, x + 10, y - 8,  color);
+}
+
 void zonaLetra(int idx) {
   tft.fillRect(0, Y_LETRA, 240, ALTO_LETRA, TFT_BLACK);
   tft.setTextDatum(TC_DATUM);
 
   if (letras.estado == LETRA_INSTRUMENTAL) {
     tft.setTextColor(GRIS, TFT_BLACK);
-    tft.drawString("~ instrumental ~", 120, Y_LETRA + 45, 4);
+    tft.drawString("instrumental", 120, Y_LETRA + 50, 4);
+    dibujarNota(90, Y_LETRA + 30, GRIS);
+    dibujarNota(140, Y_LETRA + 34, GRIS);
     return;
   }
   if (letras.estado != LETRA_OK) {
@@ -176,14 +210,40 @@ void zonaLetra(int idx) {
                    120, Y_LETRA + 48, 2);
     return;
   }
-  if (idx < 0 || !letras.lineas[idx].texto[0]) {
-    // Silencio entre estrofas: la pantalla se queda limpia, que es lo
-    // correcto — no hay nada que cantar en este momento.
+
+  bool enSilencio = (idx < 0) || esSilencio(letras.lineas[idx].texto);
+
+  // ------------------------------------------------------------------
+  //  SILENCIO: intro, solo instrumental o pausa entre estrofas.
+  //
+  //  Antes aquí se dejaba la pantalla en blanco, y estaba mal: durante
+  //  la intro de una canción podías estar 20 segundos mirando un hueco
+  //  negro sin saber si el aparato se había colgado.
+  //
+  //  Ahora se dibuja una nota (para que se vea que ES un tramo sin voz,
+  //  no un fallo) y DEBAJO, en gris, la frase que viene. Así se puede
+  //  seguir la canción incluso antes de que empiece a cantarse.
+  // ------------------------------------------------------------------
+  if (enSilencio) {
+    int sig = siguienteConTexto(idx < 0 ? 0 : idx + 1);
+
+    dibujarNota(104, Y_LETRA + 26, GRIS_OSCURO);
+    dibujarNota(128, Y_LETRA + 30, GRIS_OSCURO);
+
+    if (sig >= 0) {
+      String s2[3]; int fs;
+      int ns = partirConReserva(String(letras.lineas[sig].texto), ANCHO, s2, 2, fs);
+      tft.setTextColor(GRIS, TFT_BLACK);
+      int alto = (fs == 4) ? 27 : 19;
+      int y = Y_LETRA + ALTO_LETRA - 8 - ns * alto;
+      for (int i = 0; i < ns; i++) tft.drawString(s2[i], 120, y + i * alto, fs);
+    }
     return;
   }
 
-  // Hasta 3 renglones, y si aun así no cabe se encoge la fuente antes de
-  // recortar. Perder palabras de la canción es peor que perder tamaño.
+  // ------------------------------------------------------------------
+  //  CANTANDO: la frase actual grande y blanca, con contexto en gris.
+  // ------------------------------------------------------------------
   String c[4]; int fuente = 4;
   int n = partirConReserva(String(letras.lineas[idx].texto), ANCHO, c, 3, fuente);
 
@@ -191,25 +251,31 @@ void zonaLetra(int idx) {
   int bloque = n * alto;
   int y = Y_LETRA + (ALTO_LETRA - bloque) / 2;
 
-  // El contexto (línea anterior y siguiente) solo se dibuja si sobra
-  // sitio. Cuando la frase actual es larga, ella manda.
+  // El contexto solo se dibuja si sobra sitio: cuando la frase actual es
+  // larga, ella manda.
   bool hayHueco = (bloque + 42) <= ALTO_LETRA;
 
-  if (hayHueco && idx > 0 && letras.lineas[idx-1].texto[0]) {
-    String a[2]; int fa;
-    partirConReserva(String(letras.lineas[idx-1].texto), ANCHO, a, 1, fa);
-    tft.setTextColor(GRIS_OSCURO, TFT_BLACK);
-    tft.drawString(a[0], 120, Y_LETRA, 2);
+  if (hayHueco) {
+    int ant = anteriorConTexto(idx - 1);
+    if (ant >= 0) {
+      String a[3]; int fa;
+      partirConReserva(String(letras.lineas[ant].texto), ANCHO, a, 1, fa);
+      tft.setTextColor(GRIS_OSCURO, TFT_BLACK);
+      tft.drawString(a[0], 120, Y_LETRA, 2);
+    }
   }
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   for (int i = 0; i < n; i++) tft.drawString(c[i], 120, y + i * alto, fuente);
 
-  if (hayHueco && idx + 1 < letras.n && letras.lineas[idx+1].texto[0]) {
-    String sg[2]; int fs;
-    partirConReserva(String(letras.lineas[idx+1].texto), ANCHO, sg, 1, fs);
-    tft.setTextColor(GRIS, TFT_BLACK);
-    tft.drawString(sg[0], 120, Y_LETRA + ALTO_LETRA - 18, 2);
+  if (hayHueco) {
+    int sig = siguienteConTexto(idx + 1);
+    if (sig >= 0) {
+      String sg[3]; int fs;
+      partirConReserva(String(letras.lineas[sig].texto), ANCHO, sg, 1, fs);
+      tft.setTextColor(GRIS, TFT_BLACK);
+      tft.drawString(sg[0], 120, Y_LETRA + ALTO_LETRA - 18, 2);
+    }
   }
 }
 

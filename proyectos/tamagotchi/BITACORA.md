@@ -439,6 +439,43 @@ viaje/2`) más un ajuste manual `AJUSTE_LETRA_MS = 400`, para afinar mirando.
 Detalle en [`5-investigacion/limitaciones-de-pantalla.md`](5-investigacion/limitaciones-de-pantalla.md)
 y [`precarga-de-letras.md`](5-investigacion/precarga-de-letras.md).
 
+### 🎵 Dos arreglos más: notas musicales y silencios
+
+**El símbolo `♪` dejaba un hueco.** Los `.lrc` lo usan para marcar los tramos sin
+voz (intros, solos, puentes). Al no existir en las fuentes, se convertía en un
+espacio en blanco sin explicación.
+
+Ahora se traduce a `~`, la pantalla lo reconoce, y **dibuja una nota musical con
+primitivas gráficas** — cabeza, palo y banderita. Como la fuente no la trae, se
+pinta a mano.
+
+**La zona de la letra se quedaba vacía en los silencios.** Y esto era una
+decisión de diseño mía, mal tomada. El código decía:
+
+```cpp
+if (idx < 0 || !letras.lineas[idx].texto[0]) {
+  return;    // "si nadie canta, no hay nada que mostrar"
+}
+```
+
+Suena lógico y en la práctica es horrible: durante una intro puedes pasar 20
+segundos mirando un hueco negro **sin saber si el aparato se colgó**.
+
+🔑 **Una pantalla vacía es indistinguible de un aparato roto.** Es exactamente la
+razón por la que existen el RF-06 y el RF-07 — el aparato nunca debe dejar al
+usuario adivinando. Lo tenía escrito en los requerimientos y aun así lo hice mal
+aquí.
+
+Ahora, durante un silencio se ve:
+
+```
+        ♪ ♪            <- dibujado: es un tramo sin voz, no un fallo
+   la frase que viene   <- en gris, debajo
+```
+
+Y la búsqueda de contexto **salta los silencios**: busca la anterior y la
+siguiente *con texto*, en vez de mostrar huecos.
+
 ### 🔜 En qué me quedé — siguiente sesión
 
 **Verificaciones pendientes de mirar:**

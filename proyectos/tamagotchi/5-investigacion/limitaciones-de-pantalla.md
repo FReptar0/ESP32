@@ -119,3 +119,59 @@ solución **no** era agrandar la pila: era no poner 7 KB en ella.
 🔑 **La lección:** ante un `Stack canary watchpoint triggered`, buscar variables
 locales grandes — arrays, estructuras, buffers. La memoria libre que reporta
 `ESP.getFreeHeap()` no dice nada sobre la pila.
+
+
+---
+
+## 5. 🎵 El símbolo de nota musical dejaba un hueco
+
+**Qué pasaba:** los archivos `.lrc` usan `♪` (y `♩ ♫ ♬`) para marcar los tramos
+**sin voz**: intros, solos, puentes instrumentales. No son texto que falte — son
+información sobre la canción.
+
+Pero al no existir en las fuentes integradas, `aASCII` los mandaba al caso
+`default`, que los convertía en un espacio. Resultado: un hueco raro sin
+explicación.
+
+**Solución en dos partes:**
+
+1. Los cuatro símbolos (`U+2669`–`U+266C`) se traducen a `~`.
+2. La pantalla **reconoce ese marcador** y, en su lugar, dibuja una nota musical
+   de verdad con primitivas gráficas — cabeza, palo y banderita. Como las fuentes
+   no la traen, se pinta a mano.
+
+## 6. 🕳️ La zona de la letra se quedaba vacía en los silencios
+
+**Reportado así:** *"al cambiar de canción, hasta que no entra la primera frase
+el espacio de las letras queda vacío"* y *"cuando llega a las pausas donde no hay
+frase desaparece todo el texto"*.
+
+**Era una decisión de diseño mía, y estaba mal.** El código decía literalmente:
+
+```cpp
+if (idx < 0 || !letras.lineas[idx].texto[0]) {
+  return;    // "silencio entre estrofas: la pantalla se queda limpia"
+}
+```
+
+El razonamiento era *"si nadie canta, no hay nada que mostrar"*. Suena lógico y
+en la práctica es horrible: durante la intro de una canción puedes pasar 20
+segundos mirando un hueco negro, **sin saber si el aparato se colgó**.
+
+🔑 **Una pantalla vacía es indistinguible de un aparato roto.** Es la misma razón
+por la que existen el RF-06 y el RF-07 (distinguir "no hay música" de "no hay
+internet"): el aparato nunca debe dejar al usuario adivinando.
+
+**Comportamiento nuevo durante un silencio:**
+
+```
+        ♪ ♪            <- dibujado, para que se vea que ES un tramo sin voz
+   la frase que viene   <- en gris, debajo
+```
+
+Así se puede seguir la canción **antes** de que empiece a cantarse, y queda claro
+que el aparato está vivo y sabe lo que hace.
+
+Además, la búsqueda de la línea anterior y la siguiente ahora **salta los
+silencios**: busca la anterior y la siguiente *con texto*, en vez de mostrar
+huecos como contexto.

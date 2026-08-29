@@ -76,6 +76,15 @@ inline String aASCII(const String& in) {
         case 0x201C: case 0x201D: out += '"';  break;  // " "
         case 0x2013: case 0x2014: out += '-';  break;  // guiones largos – —
         case 0x2026: out += "..."; break;              // puntos suspensivos …
+
+        // Símbolos de nota musical: ♩ ♪ ♫ ♬
+        // En los archivos .lrc marcan los tramos SIN voz — intros,
+        // solos, puentes instrumentales. No son texto que falte: son
+        // información. Se traducen a '~' y la pantalla los reconoce
+        // para dibujar una nota de verdad en su lugar.
+        case 0x2669: case 0x266A: case 0x266B: case 0x266C:
+          out += '~'; break;
+
         default:     out += ' ';  break;
       }
       continue;
