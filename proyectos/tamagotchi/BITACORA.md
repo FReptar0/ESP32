@@ -301,7 +301,58 @@ hasta su tamaño de trabajo y ahí se quedan.
 
 Detalle en [`5-investigacion/memoria-en-regimen.md`](5-investigacion/memoria-en-regimen.md).
 
+### 🎉 Paso 7 completado — se ve en la pantalla
+
+```
+🎵 Chilango Blues — Mon Laferte [Chilango Blues]
+```
+
+**RF-01, RF-02, RF-03 y RF-05 cerrados.** El aparato hace lo que se pidió al
+arrancar el proyecto: muestra la canción y el disco al que pertenece.
+
+**Decisiones de diseño de la pantalla:**
+
+- **Título** en fuente 4 blanca, hasta 2 líneas, cortando **por palabras** (no a
+  mitad de palabra) y con `...` si no cabe. El corte se calcula con
+  `tft.textWidth()`, midiendo de verdad en vez de contar caracteres — con una
+  fuente de ancho variable, "IIIII" y "WWWWW" no ocupan lo mismo.
+- **Artista** en fuente 4 verde Spotify · **álbum** en fuente 2 gris. La
+  jerarquía por tamaño y color es lo que una OLED monocroma no habría permitido.
+- **Solo se redibuja el texto cuando cambia la canción.** Redibujar los 240×240
+  cada 5 segundos haría parpadear la pantalla sin ninguna necesidad. La barra de
+  progreso sí se actualiza siempre, pero es un `fillRect` diminuto.
+- **Brillo por PWM al 55%** (RNF-02), tal como se había previsto en el plano
+  físico: `BLK` está en un pin con PWM justamente para esto.
+- Pantallas propias para "en silencio" (RF-06) y "sin conexión" (RF-07), que
+  son estados distintos y hay que poder distinguirlos.
+
+### 🔤 Descubrimiento: las fuentes 6, 7 y 8 solo tienen números
+
+Al probar la pantalla apareció un "6" naranja suelto donde debía decir
+"Fuente 6". No era un fallo: **en TFT_eSPI las fuentes 6, 7 y 8 solo incluyen
+`0-9 . : - a p m`**, porque están pensadas para relojes y medidores. De
+`"Fuente 6"` solo se dibujó el `6`.
+
+Consecuencia práctica: **la fuente 4 es la más grande con alfabeto completo** de
+las integradas. Refuerza la elección del RNF-01. Para títulos más grandes habría
+que usar fuentes externas (`LOAD_GFXFF`, ya habilitado).
+
 ### 🔜 En qué me quedé — siguiente sesión
+
+**Verificaciones pendientes de mirar:**
+- Pausar Spotify → debe aparecer "EN PAUSA" y la barra ponerse gris (RF-06)
+- Apagar el WiFi → debe aparecer "Sin conexión" en rojo (RF-07)
+- Ver la pantalla a oscuras y ajustar el brillo (RNF-02)
+
+**Lo siguiente de verdad:** las letras (RF-04). Antes de programar nada, la
+prueba barata: buscar en LRCLIB 5 canciones que escuches de verdad. Si tres no
+aparecen, hay que replantear el requerimiento (S-05).
+
+**Mejora pendiente:** títulos largos se cortan con `...`. Un desplazamiento
+horizontal se vería mucho mejor, y `TFT_eSPI` trae *sprites* para hacerlo sin
+parpadeo — fue una de las razones del ADR-0008.
+
+### 📜 Historial anterior
 
 **Paso 7: la pantalla.** Es lo único que falta para cerrar RF-01, RF-02 y RF-03
 — los datos ya están, solo hay que dibujarlos. Toca:

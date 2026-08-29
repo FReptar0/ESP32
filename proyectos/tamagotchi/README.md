@@ -7,7 +7,7 @@ Un aparatito de escritorio con ESP32 que muestra qué estás escuchando en Spoti
 > que reacciona a tu música), no por lo que hace hoy. La v1 es "una pantalla que
 > muestra la canción", que ya trae bastante trabajo.
 
-- **Estado:** 🟢 Leyendo Spotify · siguiente paso: la pantalla
+- **Estado:** 🟢 **Funcionando** · muestra la canción en pantalla
 - **Tipo:** Proyecto de descubrimiento (se compran piezas sobre la marcha)
 - **Objetivo real:** aprender electrónica e IoT
 
@@ -18,11 +18,11 @@ Un aparatito de escritorio con ESP32 que muestra qué estás escuchando en Spoti
 ```mermaid
 graph LR
     A["1 · Blink"] --> B["2 · WiFi"]
-    B --> C["3 · HTTPS +<br/>medir RAM"]
+    B --> C["3 · HTTPS"]
     C --> D["4 · OAuth"]
-    D --> E["5 · Renovar<br/>token solo"]
+    D --> E["5 · Token"]
     E --> F["6 · Leer la<br/>canción"]
-    F --> G["7 · Dibujar en<br/>pantalla"]
+    F --> G["7 · Pantalla"]
     G --> H["8 · Letras"]
 
     style A fill:#2d4a2d,color:#fff
@@ -31,39 +31,48 @@ graph LR
     style D fill:#2d4a2d,color:#fff
     style E fill:#2d4a2d,color:#fff
     style F fill:#2d4a2d,color:#fff
-    style G fill:#5a4a2d,color:#fff
+    style G fill:#2d4a2d,color:#fff
+    style H fill:#5a4a2d,color:#fff
 ```
 
-✅ **Pasos 1 al 6 hechos.** El ESP32 lee Spotify por su cuenta, con el
-certificado del servidor verificado:
+## ✅ Funcionando
+
+El requerimiento original del proyecto —*"mostrar lo que estoy escuchando en
+Spotify, la canción y el disco al que pertenece"*— **está cumplido**.
 
 ```
-┌──────────────────────────────────────────────
-│ 🎵  Fashion Drunk
-│ 👤  Otis Stacks
-│ 💿  Otis Stacks
-└──────────────────────────────────────────────
-  ▶ [==============      ] 2:26 / 3:26   RAM: 198 KB
+┌────────────────────────────┐
+│ SONANDO                    │
+│ ──────────────────────────  │
+│                            │
+│      Chilango Blues        │  ← fuente 4, blanco
+│                            │
+│       Mon Laferte          │  ← fuente 4, verde Spotify
+│      Chilango Blues        │  ← fuente 2, gris
+│                            │
+│  ████████░░░░░░░░░░░░░░░░  │
+│  1:24                3:57  │
+└────────────────────────────┘
 ```
 
-Cada paso se atacó solo cuando el anterior funcionaba. Es lento a propósito: si
-saltas pasos y algo falla, tienes seis sospechosos en vez de uno.
+**RF-01, RF-02, RF-03 y RF-05 cerrados.** El ESP32 lo hace todo solo: se conecta,
+sincroniza la hora, valida el certificado de Spotify, renueva su propio token
+cada hora y dibuja. Sin la Mac de por medio.
 
-### 🔜 Siguiente: paso 7 — la pantalla
+### 🔜 Siguiente: las letras (RF-04)
 
-Es lo único que falta para cerrar RF-01, RF-02 y RF-03. **Los datos ya están**;
-hay que dibujarlos.
-
-1. Cablear la GMT130 → [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md)
-2. Decidir el ADR-0008: `TFT_eSPI` vs `Adafruit_ST7789`
-3. Diseñar la pantalla: qué va grande, qué chico, qué colores
+**La prueba más barata primero, y no necesita programar nada:** entra a
+[lrclib.net](https://lrclib.net) y busca **5 canciones que escuches de verdad**.
+Si tres no aparecen, hay que replantear el requerimiento antes de invertirle
+tiempo (supuesto S-05).
 
 ### Pendientes menores
 
-- Prueba de resistencia de 24 h para cerrar el RNF-06 del todo
-- Timeout en la sincronización NTP (hoy espera para siempre si falla)
-- **S-05:** probar a mano en LRCLIB 5 canciones que escuches, para saber si las
-  letras (RF-04) son viables antes de invertirles tiempo
+- Verificar RF-06 (pausar Spotify → "EN PAUSA") y RF-07 (apagar el WiFi → rojo)
+- Ver la pantalla a oscuras y ajustar el brillo (RNF-02)
+- Prueba de 24 h para cerrar el RNF-06
+- Timeout en la sincronización NTP
+- Títulos largos: hoy se cortan con `...`; con *sprites* se podrían desplazar
 
 ## Cómo está organizado
 
@@ -72,13 +81,13 @@ Las carpetas siguen las 6 fases de la
 
 | Carpeta | Qué contiene | Estado |
 |---|---|---|
-| [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟢 6 escritos · solo el 0003 sigue abierto |
+| [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟢 7 escritos · solo el 0003 sigue abierto |
 | [`2-entorno/`](2-entorno/) | El entorno aislado y cómo levantarlo | 🟢 Funcionando · recompila en ~28 s |
 | [`3-componentes/`](3-componentes/) | Ficha de cada pieza | 🟢 ESP32 y GMT130 confirmados |
 | [`4-requerimientos/`](4-requerimientos/) | Qué tiene que hacer el aparato | 🟢 Borrador listo |
-| [`5-investigacion/`](5-investigacion/) | Lo que hubo que averiguar, con fuentes | 🟢 7 hallazgos documentados |
+| [`5-investigacion/`](5-investigacion/) | Lo que hubo que averiguar, con fuentes | 🟢 9 hallazgos documentados |
 | [`6-esquemas/`](6-esquemas/) | El mapa: lógico y físico | 🟢 Los dos listos |
-| `firmware/` | El código | 🟢 Leyendo Spotify con TLS verificado |
+| `firmware/` | El código | 🟢 Completo hasta el paso 7 |
 | [`BITACORA.md`](BITACORA.md) | Qué pasó en cada sesión | 🟢 Al día |
 
 ---
