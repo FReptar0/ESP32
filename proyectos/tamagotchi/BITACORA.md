@@ -546,6 +546,41 @@ API de Spotify es solo de consulta: no hay forma de que avise.
 conexión TLS nueva** (~1 s y ~50 KB de pico). A 2 segundos de intervalo, medio
 tiempo se va en negociar cifrado.
 
+### 💜 Emojis, descripción de playlist y barra que se desplaza
+
+**Los emojis SÍ se pueden mostrar, pero no como imágenes.** Un emoji a 20×20 px
+a color son ~800 bytes, y existen más de 3.700: guardarlos todos serían ~3 MB, y
+el ESP32 tiene 4 MB de flash **en total** con 1,1 MB ya ocupados.
+
+Pero un corazón son **dos círculos y un triángulo**. Eso es código, no datos:
+~120 bytes de programa para **todos** los corazones, porque el color es un
+parámetro. 💜💙💚💛🖤🤍 son el mismo dibujo.
+
+🔑 **La diferencia entre guardar la respuesta y guardar la receta.** Una imagen
+es la respuesta ya hecha, una por cada caso. El dibujo es la receta: sirve para
+todos.
+
+Se dibujan corazones (7 colores), destellos, llamas y notas. Cualquier otro emoji
+queda como un **punto discreto** — un hueco vacío parece un fallo, un punto se lee
+como "aquí había algo".
+
+**Detalle que casi se escapa:** `❤️` no es un carácter, son dos: el corazón más un
+"selector de variante" **invisible**. Si ese invisible se convirtiera en espacio,
+cada emoji dejaría un hueco fantasma al lado. Se descartan explícitamente.
+
+Verificado con una playlist real: `Alo 💜` resuelto y el corazón dibujado en
+morado.
+
+**La descripción de la playlist** se pide junto al nombre y va en gris tras un
+guion. ⚠️ Viene con **HTML**: entidades (`&#x27;`) y a veces etiquetas `<a>`. Sin
+limpiarla se leería `&#x27;` literalmente.
+
+**Si no cabe, se desplaza** — con un *sprite*, que es un trozo de pantalla que se
+dibuja en memoria y se vuelca de golpe. Dibujando directo se vería el borrado
+entre fotogramas. Cuesta 8 KB y es una de las razones del ADR-0008.
+
+Detalle en [`5-investigacion/emojis-e-iconos.md`](5-investigacion/emojis-e-iconos.md).
+
 ### 🔜 En qué me quedé — siguiente sesión
 
 **Verificaciones pendientes de mirar:**

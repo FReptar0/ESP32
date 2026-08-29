@@ -17,6 +17,7 @@
 #include "secrets.h"
 #include "texto.h"
 #include "fuentes.h"
+#include "iconos.h"
 #include "letras.h"
 
 extern const uint8_t rootca_crt_bundle_start[] asm("_binary_data_cert_x509_crt_bundle_bin_start");
@@ -80,6 +81,19 @@ bool  sonando = false;
 bool  colaPedida = false;
 String contextoUri;        // de dónde sale la música: playlist, álbum, artista...
 String nombreContexto;     // el nombre legible, para la barra de arriba
+String descContexto;       // la descripción de la playlist
+
+// Sprite para la barra de arriba. Un sprite es un trozo de pantalla que
+// se dibuja EN MEMORIA y luego se vuelca de golpe. Es lo que permite
+// desplazar el texto sin que parpadee: si se dibujara directo sobre la
+// pantalla, se vería el borrado entre fotograma y fotograma.
+TFT_eSprite barraSpr = TFT_eSprite(&tft);
+const int BARRA_ANCHO = 240 - MARGEN * 2 - 20;   // dejando sitio al play/pausa
+const int BARRA_ALTO  = 20;
+int  desplazamiento = 0;
+int  anchoContenido = 0;
+bool hayQueDesplazar = false;
+unsigned long ultimoDesplaz = 0;
 
 int  lineaPintada = -2;
 unsigned long ultimaConsulta = 0, ultimoRefresco = 0;
@@ -165,28 +179,62 @@ void dibujarPlayPausa(int x, int y, bool reproduciendo, uint16_t color) {
   else { tft.fillRect(x, y - 6, 4, 12, color); tft.fillRect(x + 6, y - 6, 4, 12, color); }
 }
 
-// Arriba va DE DÓNDE sale la música (la playlist), no un "SONANDO"
-// redundante: si está sonando o no ya se ve en el símbolo de la derecha
-// y en el color de la barra de progreso.
-void barraEstado(const String& txt, bool reproduciendo, uint16_t color) {
-  String clave = txt + (reproduciendo ? "|1" : "|0");
-  if (estadoPintado == clave) return;
-  estadoPintado = clave;
+// Pinta el contenido de la barra (nombre + descripción) dentro del sprite,
+// desplazado `off` píxeles a la izquierda.
+void pintarContenidoBarra(int off, uint16_t colorNombre) {
+  barraSpr.fillSprite(TFT_BLACK);
+  barraSpr.setFreeFont(&FuenteChica);
+  int x = -off;
+  x += dibujarMixto(barraSpr, nombreContexto, x, 2, colorNombre);
+  if (descContexto.length()) {
+    // La descripción va en un tono más apagado, separada por un guion:
+    // se lee como información secundaria sin competir con el nombre.
+    x += dibujarMixto(barraSpr, " - ", x, 2, GRIS_OSCURO);
+    x += dibujarMixto(barraSpr, descContexto, x, 2, GRIS);
+  }
+  // Si el texto se desplaza, se repite tras un hueco para que el bucle
+  // se vea continuo en vez de dar un salto brusco al reiniciarse.
+  if (hayQueDesplazar) {
+    int x2 = x + 30;
+    if (x2 < BARRA_ANCHO) {
+      x2 += dibujarMixto(barraSpr, nombreContexto, x2, 2, colorNombre);
+      if (descContexto.length()) {
+        x2 += dibujarMixto(barraSpr, " - ", x2, 2, GRIS_OSCURO);
+        dibujarMixto(barraSpr, descContexto, x2, 2, GRIS);
+      }
+    }
+  }
+  barraSpr.pushSprite(MARGEN, 4);
+}
 
-  tft.fillRect(0, 0, 240, 26, TFT_BLACK);
-  usarFuente(false);
-  tft.setTextColor(color, TFT_BLACK);
-  tft.setTextDatum(TL_DATUM);
+void barraEstado(bool reproduciendo, uint16_t color) {
+  String clave = nombreContexto + "|" + descContexto + (reproduciendo ? "|1" : "|0");
+  if (estadoPintado != clave) {
+    estadoPintado = clave;
+    barraSpr.setFreeFont(&FuenteChica);
+    anchoContenido = anchoMixto(barraSpr, nombreContexto);
+    if (descContexto.length())
+      anchoContenido += anchoMixto(barraSpr, " - ") + anchoMixto(barraSpr, descContexto);
+    hayQueDesplazar = anchoContenido > BARRA_ANCHO;
+    desplazamiento = 0;
 
-  // El nombre se recorta si no cabe, dejando sitio al símbolo.
-  String t = txt;
-  while (t.length() > 1 && tft.textWidth(t) > ANCHO - 26)
-    t = t.substring(0, t.length() - 1);
-  if (t != txt && t.length() > 1) t = t.substring(0, t.length() - 1) + "...";
-  tft.drawString(t, MARGEN, 4);
+    tft.fillRect(0, 0, 240, 27, TFT_BLACK);
+    dibujarPlayPausa(240 - MARGEN - 11, 13, reproduciendo, color);
+    tft.drawFastHLine(0, 27, 240, GRIS_LINEA);
+    pintarContenidoBarra(0, color);
+  }
+}
 
-  dibujarPlayPausa(240 - MARGEN - 11, 12, reproduciendo, color);
-  tft.drawFastHLine(0, 27, 240, GRIS_LINEA);
+// Avanza el desplazamiento. Se llama desde el bucle principal, no desde
+// las consultas: así se mueve suave aunque no haya novedades de Spotify.
+void moverBarra(uint16_t color) {
+  if (!hayQueDesplazar) return;
+  unsigned long ahora = millis();
+  if (ahora - ultimoDesplaz < 40) return;      // ~25 fotogramas por segundo
+  ultimoDesplaz = ahora;
+  desplazamiento++;
+  if (desplazamiento > anchoContenido + 30) desplazamiento = 0;
+  pintarContenidoBarra(desplazamiento, color);
 }
 
 void cabecera(const char* titulo, const char* artista) {
@@ -377,13 +425,16 @@ bool renovarToken() {
 //  no cambia.
 void resolverContexto(const char* uri, const char* tipo) {
   if (!uri || !*uri) {                    // canción suelta, sin contexto
-    if (contextoUri != "") { contextoUri = ""; nombreContexto = ""; estadoPintado = ""; }
+    if (contextoUri != "") {
+      contextoUri = ""; nombreContexto = ""; descContexto = ""; estadoPintado = "";
+    }
     return;
   }
   if (contextoUri == uri) return;         // ya lo tenemos resuelto
 
   contextoUri = uri;
   nombreContexto = "";
+  descContexto = "";
   estadoPintado = "";                     // forzar repintado de la barra
 
   String u = String(uri);
@@ -396,13 +447,15 @@ void resolverContexto(const char* uri, const char* tipo) {
     HTTPClient https;
     // ?fields=name le pide a Spotify que devuelva SOLO el nombre. Sin
     // eso mandaría la playlist entera: cientos de KB de canciones.
-    if (!https.begin(cli, String(URL_PLAYLIST) + id + "?fields=name")) return;
+    if (!https.begin(cli, String(URL_PLAYLIST) + id + "?fields=name,description")) return;
     https.addHeader("Authorization", "Bearer " + accessToken);
     int cod = https.GET();
     if (cod == 200) {
       JsonDocument doc;
-      if (!deserializeJson(doc, https.getStream()))
-        nombreContexto = String((const char*)(doc["name"] | ""));
+      if (!deserializeJson(doc, https.getStream())) {
+        nombreContexto = aLatin1(String((const char*)(doc["name"] | "")));
+        descContexto   = limpiarHTML(String((const char*)(doc["description"] | "")));
+      }
     } else if (cod == 403 || cod == 404) {
       // Playlist privada: leerla exige el permiso playlist-read-private,
       // que no se pidió. Se puede añadir volviendo a correr
@@ -573,9 +626,8 @@ void consultar() {
     }
     lineaPintada = -2;                  // forzar repintado con la letra ya cargada
   }
-  String arriba = nombreContexto.length() ? aLatin1(nombreContexto)
-                                          : String(sonando ? "Reproduciendo" : "En pausa");
-  barraEstado(arriba, sonando, sonando ? VERDE_SPOTIFY : GRIS);
+  if (!nombreContexto.length()) nombreContexto = sonando ? "Reproduciendo" : "En pausa";
+  barraEstado(sonando, sonando ? VERDE_SPOTIFY : GRIS);
 }
 
 // ============================================================
@@ -590,6 +642,9 @@ void setup() {
   // librería: si no, intentaría interpretar el byte 0xF1 (ñ) como el
   // principio de una secuencia de varios bytes y se perdería.
   tft.setAttribute(UTF8_SWITCH, false);
+  // El sprite se crea UNA vez: 200x20 píxeles a 2 bytes = 8 KB.
+  barraSpr.createSprite(BARRA_ANCHO, BARRA_ALTO);
+  barraSpr.setAttribute(UTF8_SWITCH, false);
 
   pantallaMensaje("Tamagotchi", "conectando al WiFi...", TFT_WHITE);
   WiFi.mode(WIFI_STA); WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -648,6 +703,9 @@ void loop() {
       if (idx != lineaPintada) { lineaPintada = idx; zonaLetra(idx); }
       barraProgreso();
     }
+  }
+  if (claveActual.length() && claveActual[0] != '_') {
+    moverBarra(sonando ? VERDE_SPOTIFY : GRIS);
   }
   delay(20);
 }
