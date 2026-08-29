@@ -153,11 +153,24 @@ volatile bool pedirRedibujado = false;   // el núcleo 0 avisa al 1
  *  UN paso por vuelta. Entre paso y paso vuelve a consultar a
  *  Spotify, y si la canción cambió se tira lo que quedaba.
  * ------------------------------------------------------------ */
-enum PasoLetra { LETRA_LISTA, LETRA_EXACTA, LETRA_CANDIDATOS, LETRA_PROBAR };
-PasoLetra pasoLetra = LETRA_LISTA;
+/*  UNA sola máquina de pasos para TODAS las peticiones lentas, tanto la
+ *  letra de la canción actual como la precarga de la siguiente.
+ *
+ *  La primera versión solo partió en pasos la búsqueda de la canción
+ *  actual, dejando la precarga como un bloque entero. Fue un arreglo a
+ *  medias: la precarga encadena hasta 6 peticiones (~9 s) y se lanza
+ *  justo después de cargar la letra nueva — o sea, en el mismo momento
+ *  en que uno tiende a saltar de canción.
+ *
+ *  Ahora TODO pasa por aquí, y cada vuelta del bucle hace exactamente
+ *  UNA petición. Entre vuelta y vuelta se consulta a Spotify.
+ */
+enum Fase { FASE_NADA, FASE_COLA, FASE_EXACTA, FASE_CANDIDATOS, FASE_PROBAR };
+Fase   fase = FASE_NADA;
+bool   faseEsPrecarga = false;      // ¿para la canción actual o la siguiente?
 int    candidatoActual = 0;
-String claveLetra, tLetra, aLetra, alLetra;
-long   dLetra = 0;
+String claveObj, tObj, aObj, alObj; // la canción que se está buscando
+long   dObj = 0;
 
 #define CON_DATOS(bloque) do { \
   if (xSemaphoreTake(mutexDatos, portMAX_DELAY) == pdTRUE) { bloque; \
@@ -654,16 +667,19 @@ void resolverContexto(const char* uri, const char* tipo,
 //
 //  Usa el permiso user-read-playback-state, que ya se pidió en el
 //  ADR-0010 pensando justo en cosas como esta.
-void precargarSiguiente() {
+// Pide la cola de reproducción y ENCOLA la búsqueda de la letra de la
+// siguiente canción. Una sola petición: el resto lo hace la máquina de
+// pasos, igual que para la canción actual.
+bool pedirCola() {
   WiFiClientSecure cli; cli.setCACertBundle(rootca_crt_bundle_start);
   HTTPClient https;
-  if (!https.begin(cli, URL_COLA)) return;
+  if (!https.begin(cli, URL_COLA)) return false;
   https.addHeader("Authorization", "Bearer " + accessToken);
   int cod = https.GET();
-  if (cod != 200) { https.end(); Serial.printf("[Cola] HTTP %d\n", cod); return; }
+  if (cod != 200) { https.end(); Serial.printf("[Cola] HTTP %d\n", cod); return false; }
 
-  // La cola trae hasta 20 canciones con todos sus datos: son decenas de
-  // KB. El filtro se queda solo con la PRIMERA y sus cuatro campos.
+  // La cola trae hasta 20 canciones con todos sus datos: decenas de KB.
+  // El filtro se queda solo con la PRIMERA y sus cuatro campos.
   JsonDocument filtro;
   filtro["queue"][0]["name"] = true;
   filtro["queue"][0]["duration_ms"] = true;
@@ -674,44 +690,21 @@ void precargarSiguiente() {
   DeserializationError err = deserializeJson(doc, https.getStream(),
                                              DeserializationOption::Filter(filtro));
   https.end();
-  if (err) { Serial.printf("[Cola] JSON: %s\n", err.c_str()); return; }
+  if (err) { Serial.printf("[Cola] JSON: %s\n", err.c_str()); return false; }
 
   JsonObject sig = doc["queue"][0];
-  if (sig.isNull()) return;
-
+  if (sig.isNull()) return false;
   const char* t = sig["name"] | "";
-  const char* a = sig["artists"][0]["name"] | "";
-  const char* al = sig["album"]["name"] | "";
-  long dur = sig["duration_ms"] | 0;
-  if (!*t) return;
+  if (!*t) return false;
 
-  String clave = String(t) + "|" + String(a);
-  if (clave == clavePrecarga) return;      // ya la teníamos
-
-  Serial.printf("[Precarga] siguiente: %s — %s\n", t, a);
-
-  // ⚠️ Aquí había un `Letras tmp;` como variable local, y reventaba la
-  //    placa con "Stack canary watchpoint triggered".
-  //
-  //    Un objeto Letras pesa ~6.8 KB (90 líneas x 76 bytes). Las
-  //    variables locales viven en la PILA, y la pila de la tarea
-  //    principal de Arduino son solo 8 KB — aunque queden 186 KB de
-  //    memoria libre, que es de otro sitio (el "montón" o heap).
-  //
-  //    El "canario" es un valor centinela que el sistema pone al final
-  //    de la pila. Si aparece pisado, sabe que hubo desbordamiento y
-  //    reinicia a propósito, en vez de seguir con la memoria corrupta.
-  //
-  //    La solución no es agrandar la pila: es no poner 7 KB en ella.
-  //    `precarga` es una variable global, así que vive fuera de la pila.
-  precarga.limpiar();
-  if (!precarga.buscar(rootca_crt_bundle_start, t, a, al, dur)) {
-    precarga.limpiar();
-    precarga.estado = LETRA_NO_HAY;
-  }
-  clavePrecarga = clave;
-  Serial.printf("[Precarga] lista (%d líneas) · RAM %lu B\n",
-                precarga.n, (unsigned long)ESP.getFreeHeap());
+  claveObj = String(t) + "|" + String((const char*)(sig["artists"][0]["name"] | ""));
+  if (claveObj == clavePrecarga) return false;      // ya la teníamos
+  tObj = t;
+  aObj = (const char*)(sig["artists"][0]["name"] | "");
+  alObj = (const char*)(sig["album"]["name"] | "");
+  dObj = sig["duration_ms"] | 0;
+  Serial.printf("[Precarga] siguiente: %s — %s\n", tObj.c_str(), aObj.c_str());
+  return true;
 }
 
 void consultar() {
@@ -821,16 +814,18 @@ void consultar() {
       pedirRedibujado = true;
     });
 
+    // Cualquier trabajo en curso deja de valer: la canción es otra.
+    fase = FASE_NADA;
+
     if (desdePrecarga) {
       Serial.printf("[Letra] ⚡ desde precarga (%d líneas)\n", letras.n);
-      pasoLetra = LETRA_LISTA;
     } else {
-      // No se busca aquí. Se ENCOLA, y el bucle de red irá dando un paso
-      // por vuelta, consultando a Spotify entre medias.
-      claveLetra = clave;
-      tLetra = titulo; aLetra = artista; alLetra = album; dLetra = duracionMs;
-      pasoLetra = LETRA_EXACTA;
-      candidatoActual = 0;
+      // No se busca aquí. Se ENCOLA, y el bucle de red dará un paso por
+      // vuelta, consultando a Spotify entre medias.
+      claveObj = clave;
+      tObj = titulo; aObj = artista; alObj = album; dObj = duracionMs;
+      fase = FASE_EXACTA; faseEsPrecarga = false; candidatoActual = 0;
+      clavePrecarga = "";       // precarga se usará como borrador
       precarga.limpiar();
       Serial.printf("[Letra] buscando: %s — %s (%lds)\n", titulo, artista, duracionMs / 1000);
     }
@@ -905,54 +900,75 @@ void tareaRed(void*) {
                               ? CERCA_DEL_FIN_MS : cadaCuantoMs;
     if (ahora - ultimaConsulta >= intervalo) { ultimaConsulta = ahora; consultar(); }
 
-    // --- Un paso de la búsqueda de letra, si hay una en curso ---
-    if (pasoLetra != LETRA_LISTA) {
-      // Si la canción cambió mientras tanto, lo que quedaba ya no sirve.
-      if (claveActual != claveLetra) {
+    // --- UNA petición lenta por vuelta, sea cual sea ---
+    if (fase != FASE_NADA) {
+      // Si estábamos buscando la letra de la canción actual y esa canción
+      // ya cambió, lo que quedaba no sirve.
+      if (!faseEsPrecarga && claveActual != claveObj) {
         Serial.println("[Letra] ⛔ cancelada: cambió la canción");
-        pasoLetra = LETRA_LISTA;
+        fase = FASE_NADA;
         precarga.limpiar();
       } else {
-        bool ok = false, terminado = false;
         const uint8_t* ca = rootca_crt_bundle_start;
+        bool ok = false, terminado = false;
 
-        if (pasoLetra == LETRA_EXACTA) {
-          ok = precarga.pedirExacta(ca, tLetra, aLetra, alLetra, dLetra / 1000);
-          pasoLetra = ok ? LETRA_LISTA : LETRA_CANDIDATOS;
-          terminado = ok;
-        } else if (pasoLetra == LETRA_CANDIDATOS) {
-          if (precarga.buscarCandidatos(ca, tLetra, aLetra, dLetra / 1000)) {
-            pasoLetra = LETRA_PROBAR; candidatoActual = 0;
-          } else { pasoLetra = LETRA_LISTA; terminado = true; }
-        } else {                                  // LETRA_PROBAR
-          ok = precarga.pedirPorId(ca, precarga.candidatos[candidatoActual]);
-          candidatoActual++;
-          if (ok || candidatoActual >= precarga.numCandidatos) {
-            pasoLetra = LETRA_LISTA; terminado = true;
-          }
+        switch (fase) {
+          case FASE_COLA:
+            if (pedirCola()) { fase = FASE_EXACTA; candidatoActual = 0; precarga.limpiar(); }
+            else fase = FASE_NADA;
+            break;
+
+          case FASE_EXACTA:
+            ok = precarga.pedirExacta(ca, tObj, aObj, alObj, dObj / 1000);
+            if (ok) { terminado = true; }
+            else fase = FASE_CANDIDATOS;
+            break;
+
+          case FASE_CANDIDATOS:
+            if (precarga.buscarCandidatos(ca, tObj, aObj, dObj / 1000)) {
+              fase = FASE_PROBAR; candidatoActual = 0;
+            } else terminado = true;
+            break;
+
+          case FASE_PROBAR:
+            ok = precarga.pedirPorId(ca, precarga.candidatos[candidatoActual]);
+            candidatoActual++;
+            if (ok || candidatoActual >= precarga.numCandidatos) terminado = true;
+            break;
+
+          default: break;
         }
 
-        // Solo se publica el resultado si la canción sigue siendo la misma.
-        if (terminado && claveActual == claveLetra) {
+        if (terminado) {
+          fase = FASE_NADA;
           if (!ok) precarga.estado = LETRA_NO_HAY;
-          CON_DATOS({ letras = precarga; precarga.limpiar();
-                      lineaPintada = -2; pedirRedibujado = true; });
-          Serial.printf("[Letra] %s (%d líneas) · RAM %lu B\n",
-                        ok ? "✅" : "❌ no encontrada", letras.n,
-                        (unsigned long)ESP.getFreeHeap());
+
+          if (faseEsPrecarga) {
+            // Se queda guardada, esperando a que llegue esa canción.
+            clavePrecarga = claveObj;
+            Serial.printf("[Precarga] lista (%d líneas) · RAM %lu B\n",
+                          precarga.n, (unsigned long)ESP.getFreeHeap());
+          } else if (claveActual == claveObj) {
+            // Solo se publica si la canción sigue siendo la misma: si no,
+            // sería la letra de otra.
+            CON_DATOS({ letras = precarga; precarga.limpiar();
+                        lineaPintada = -2; pedirRedibujado = true; });
+            Serial.printf("[Letra] %s (%d líneas) · RAM %lu B\n",
+                          ok ? "✅" : "❌ no encontrada", letras.n,
+                          (unsigned long)ESP.getFreeHeap());
+          }
         }
       }
     }
 
-    // La precarga solo se lanza cuando NO hay una búsqueda en curso: si
-    // no, se encadenarían dos operaciones lentas seguidas.
-    if (!colaPedida && pasoLetra == LETRA_LISTA && sonando
+    // La precarga solo arranca cuando NO hay nada en curso.
+    if (fase == FASE_NADA && !colaPedida && sonando
         && letras.estado != LETRA_NO_BUSCADA
         && progresoAhora() > 8000 && claveActual.length() && claveActual[0] != '_') {
       colaPedida = true;
-      precargarSiguiente();
-      ultimaConsulta = 0;      // preguntar YA: la precarga bloqueó varios segundos
+      fase = FASE_COLA; faseEsPrecarga = true;
     }
+
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 }

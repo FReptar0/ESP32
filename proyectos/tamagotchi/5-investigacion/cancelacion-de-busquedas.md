@@ -79,6 +79,67 @@ encadenarían dos operaciones lentas seguidas — volviendo al problema original
 varios segundos (y ahí es aceptable: la canción actual ya está en pantalla), así
 que al terminar se pregunta enseguida por si hubo un cambio.
 
+---
+
+## ⚠️ El primer arreglo estaba a medias
+
+Con lo anterior implementado, el problema **seguía**. Y la razón es que solo
+partí en pasos **la mitad** del trabajo.
+
+La búsqueda de la canción actual quedó bien. Pero `precargarSiguiente()` seguía
+siendo un bloque entero:
+
+```
+1 petición (cola de reproducción)   ~1,2 s
++ buscar() COMPLETA                 hasta ~8 s
+                                   ---------
+                                     ~9,2 s de ceguera
+```
+
+Y lo peor: **se lanza justo después de cargar la letra de la canción nueva** — o
+sea, exactamente en el momento en que uno tiende a saltar otra vez.
+
+Yo lo había razonado así: *"la precarga puede bloquear, porque la canción actual
+ya está en pantalla"*. El razonamiento era falso. **Da igual para qué sea la
+petición: mientras el hilo de red esté ocupado, el aparato es ciego.**
+
+🔑 **Al arreglar un bloqueo hay que mirar TODAS las operaciones lentas del mismo
+hilo, no solo la que se estaba investigando.** Dejar una sin tocar deja el
+problema entero.
+
+## La solución definitiva: una sola máquina de pasos
+
+Ahora **todas** las peticiones lentas —la letra de la canción actual y la
+precarga de la siguiente— pasan por la misma máquina de estados, y cada vuelta
+del bucle hace **exactamente una petición**:
+
+```mermaid
+stateDiagram-v2
+    [*] --> NADA
+    NADA --> EXACTA: cambió la canción
+    NADA --> COLA: toca precargar
+    COLA --> EXACTA: ya sé cuál es la siguiente
+    EXACTA --> [*]: encontrada ✅
+    EXACTA --> CANDIDATOS: no está con esa duración
+    CANDIDATOS --> PROBAR: hay candidatos
+    CANDIDATOS --> [*]: ninguno
+    PROBAR --> PROBAR: probar el siguiente
+    PROBAR --> [*]: encontrada o agotados
+```
+
+Entre cada paso, el bucle vuelve a consultar a Spotify. **El retraso máximo pasa
+a ser el de una sola petición.**
+
+Verificado saltando de canción varias veces seguidas:
+
+```
+🎵 Staring — Tipling Rock      → ✅ 54 líneas
+🎵 Sue Me — Sabrina Carpenter  → ✅ 58 líneas
+🎵 HOLIDAY — Lil Nas X         → ✅ 51 líneas
+```
+
+Ninguna se quedó atascada.
+
 ## La lección
 
 🔑 **Cualquier operación larga en el mismo hilo que detecta cambios tiene que

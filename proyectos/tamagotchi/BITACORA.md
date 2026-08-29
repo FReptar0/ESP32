@@ -590,15 +590,31 @@ detecta preguntando, durante ese rato el aparato era **ciego**.
 
 No había ninguna cancelación: una vez empezaba la búsqueda, iba hasta el final.
 
-**Solución: la búsqueda pasa de bloque a cola de pasos**, y el bucle de red hace
-un paso por vuelta, consultando a Spotify entre medias:
+**⚠️ El primer arreglo estuvo a medias.** Partí en pasos la búsqueda de la
+canción actual pero dejé `precargarSiguiente()` como un bloque entero: 1 petición
+de cola + `buscar()` completa = **~9 s de ceguera**. Y se lanza justo después de
+cargar la letra nueva, o sea en el momento exacto en que uno vuelve a saltar.
+
+Lo había razonado como *"la precarga puede bloquear, porque la canción actual ya
+está en pantalla"*. Era falso: **da igual para qué sea la petición — mientras el
+hilo de red esté ocupado, el aparato es ciego.**
+
+🔑 **Al arreglar un bloqueo hay que mirar TODAS las operaciones lentas del mismo
+hilo, no solo la que estabas investigando.**
+
+**Solución definitiva: UNA sola máquina de pasos** para todas las peticiones
+lentas —letra actual y precarga—, y el bucle de red hace exactamente una petición
+por vuelta:
 
 ```
 consultar() → paso exacta → consultar() → paso candidatos → consultar() → ...
 ```
 
-Si la canción cambió: `[Letra] ⛔ cancelada: cambió la canción`. Retraso máximo de
-~10 s a ~2,4 s.
+Si la canción cambió: `[Letra] ⛔ cancelada: cambió la canción`. El retraso máximo
+pasa a ser el de **una sola petición**.
+
+Verificado saltando varias veces seguidas: `Staring` → `Sue Me` → `HOLIDAY`,
+las tres detectadas con su letra cargada. Ninguna se atascó.
 
 🔑 **La forma más simple de "cancelar" casi nunca es abortar de verdad: es no
 encadenar.** Hacer un trozo, mirar si sigue teniendo sentido, hacer el siguiente.
