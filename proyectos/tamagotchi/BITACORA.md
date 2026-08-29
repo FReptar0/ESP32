@@ -228,6 +228,22 @@ Detalle completo en [`5-investigacion/spike-memoria-tls.md`](5-investigacion/spi
 Se empezó a aplicar el **9 de abril de 2025**, así que todos los tutoriales
 anteriores a esa fecha están mal. Buen ejemplo de por qué la fase 5 anota fechas.
 
+### 🔧 Dos arreglos sobre la marcha
+
+**El script de OAuth fallaba con `CERTIFICATE_VERIFY_FAILED`.** No era el código:
+el Python de python.org no usa el llavero de macOS y su paquete de certificados
+nunca se enlazó (`.../etc/openssl/cert.pem` no existe). El script ahora apunta a
+`certifi` explícitamente, así que funciona sin depender de la configuración de la
+máquina.
+
+📌 Es un anticipo exacto del ADR-0009: la pregunta *"¿en quién confío para
+verificar este certificado?"* es la misma que tendrá el ESP32, solo que él no
+tiene llavero de ningún tipo.
+
+**Se quitó el parpadeo del LED.** Cumplió su función en el paso 1 —demostrar que
+la placa ejecutaba nuestro código— y a partir de ahí solo molesta en un aparato
+de escritorio.
+
 ### 🔜 En qué me quedé — siguiente sesión
 
 **Paso 4 — OAuth.** Falta terminar de crear la app en el dashboard de Spotify

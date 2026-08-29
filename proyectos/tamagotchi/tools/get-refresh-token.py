@@ -32,6 +32,7 @@ import http.server
 import json
 import re
 import secrets as rnd
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -84,6 +85,28 @@ SCOPE = " ".join(PERFILES[PERFIL])
 
 SECRETS_H = Path(__file__).resolve().parent.parent / "firmware" / "include" / "secrets.h"
 
+# --- Certificados: en quién confiamos para verificar a Spotify -------------
+#
+# El Python de python.org NO usa el llavero de macOS. Trae su propio paquete
+# de certificados (certifi) pero hay que enlazarlo a mano, con el instalador
+# "/Applications/Python 3.x/Install Certificates.command", que casi nadie
+# ejecuta. Sin eso, urllib falla con CERTIFICATE_VERIFY_FAILED en CUALQUIER
+# sitio HTTPS.
+#
+# Apuntando explícitamente a certifi, el script funciona en cualquier Mac
+# sin depender de que ese paso se haya hecho.
+#
+# 📌 Es el mismo problema que tendrá el ESP32 (futuro ADR-0009): alguien
+#    tiene que decirle a quién creerle. Tu Mac tiene el llavero del sistema;
+#    el ESP32 no tiene nada y hay que dárselo nosotros.
+try:
+    import certifi
+    CONTEXTO_SSL = ssl.create_default_context(cafile=certifi.where())
+    _origen_ca = f"certifi ({certifi.where()})"
+except ImportError:
+    CONTEXTO_SSL = ssl.create_default_context()
+    _origen_ca = "el paquete por defecto de Python"
+
 # --- Credenciales ----------------------------------------------------------
 
 print(__doc__)
@@ -98,6 +121,7 @@ elif PERFIL == "completo":
     print("     ESP32 y el aparato se pierde, ese permiso se va con él.")
     print("     Considera generar dos tokens: uno 'esp32' y otro 'completo'.")
 print()
+print(f"Verificando certificados con: {_origen_ca}\n")
 print(f"Redirect URI que debe estar registrado en tu app:\n    {REDIRECT}\n")
 print("(Si en el dashboard pusiste 'localhost' en vez de '127.0.0.1',")
 print(" cámbialo ahora: Spotify ya no acepta 'localhost'.)\n")
@@ -203,8 +227,23 @@ peticion = urllib.request.Request(
 )
 
 try:
-    with urllib.request.urlopen(peticion, timeout=30) as r:
+    with urllib.request.urlopen(peticion, timeout=30, context=CONTEXTO_SSL) as r:
         tokens = json.load(r)
+except ssl.SSLCertVerificationError as e:
+    print(f"\n❌ No se pudo verificar el certificado de Spotify:\n   {e}\n")
+    print("   Esto es un problema de TU Mac, no de Spotify ni del script.")
+    print("   El Python de python.org no usa el llavero de macOS y necesita")
+    print("   que se enlacen sus certificados una vez.\n")
+    print("   Solución (se hace una sola vez, arregla TODOS tus scripts):")
+    print('     open "/Applications/Python 3.13/Install Certificates.command"\n')
+    print("   O instala certifi, que este script usa automáticamente:")
+    print("     python3 -m pip install --user certifi\n")
+    print(f"   (Ahora mismo se estaba usando: {_origen_ca})")
+    raise SystemExit(1)
+except urllib.error.URLError as e:
+    print(f"\n❌ No se pudo conectar con Spotify: {e.reason}")
+    print("   Revisa tu conexión a internet.")
+    raise SystemExit(1)
 except urllib.error.HTTPError as e:
     detalle = e.read().decode("utf-8", errors="replace")
     print(f"\n❌ Spotify rechazó el intercambio (HTTP {e.code}):\n   {detalle}\n")

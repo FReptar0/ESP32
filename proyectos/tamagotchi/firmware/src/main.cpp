@@ -159,9 +159,21 @@ void setup() {
   }
 
   Serial.println("\n=== Fin de la prueba ===");
+  Serial.println("La placa se queda en reposo, sin parpadear.");
 }
 
 void loop() {
-  digitalWrite(LED, HIGH); delay(100);
-  digitalWrite(LED, LOW);  delay(900);
+  // Sin parpadeo: ya cumplió su función.
+  //
+  // El parpadeo existía para el paso 1, como prueba de que la placa
+  // ejecutaba NUESTRO código y no algo que ya venía de fábrica. Eso ya
+  // quedó demostrado, y a partir de aquí solo molesta: este aparato va a
+  // vivir en un escritorio.
+  //
+  // Ojo con el detalle: el LED está en el GPIO2, que es uno de los pines
+  // que el ESP32 lee al arrancar para decidir cómo bootear (strapping pin).
+  // Por eso la tabla de conexiones de la pantalla no usa el GPIO2 —
+  // ver 6-esquemas/conexiones-fisicas.md.
+  digitalWrite(LED, LOW);
+  delay(1000);
 }

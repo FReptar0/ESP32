@@ -34,6 +34,46 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — El Python de python.org no usa el llavero de macOS
+
+**Qué se averiguó:** el intercambio de tokens falló con
+`SSLCertVerificationError: unable to get local issuer certificate`.
+No era culpa de Spotify ni del código: **Python no tenía ningún paquete de
+certificados con el que verificar a nadie**.
+
+```
+ssl.get_default_verify_paths().openssl_cafile
+  -> /Library/Frameworks/Python.framework/Versions/3.13/etc/openssl/cert.pem
+¿existe? -> False
+```
+
+**Causa:** el Python instalado desde python.org **no usa el llavero del
+sistema**. Trae `certifi` incluido, pero hay que enlazarlo una vez ejecutando
+`/Applications/Python 3.13/Install Certificates.command` — un paso que casi nadie
+hace y que rompe *cualquier* conexión HTTPS hasta que se corre.
+
+**Fuente:** diagnóstico propio sobre el error real.
+
+**Por qué importa — más allá del arreglo:** 🔑 **es exactamente el problema del
+futuro [ADR-0009](../1-decisiones/README.md).** La pregunta *"¿en quién confío
+para verificar este certificado?"* es la misma en los dos lados:
+
+| | ¿De dónde saca en quién confiar? |
+|---|---|
+| Navegador | Del llavero del sistema operativo |
+| Python de python.org | De `certifi`… **si alguien lo enlazó** ← aquí falló |
+| **ESP32** | **De nada. Hay que dárselo nosotros.** |
+
+Verlo primero en la Mac, donde se puede leer el error completo, vale mucho: el
+mismo fallo en el ESP32 aparecería como un `connect()` que devuelve false, sin
+más explicación.
+
+**Solución aplicada:** el script apunta explícitamente a `certifi` en vez de
+depender de la configuración de la máquina. Así funciona en cualquier Mac, se
+haya corrido el instalador o no. Y añade un mensaje de error que explica el
+problema en vez de escupir el traceback.
+
+
 ### 2026-08-29 — ❌ El Web Playback SDK no puede correr en el ESP32
 
 **Qué se averiguó:** el Web Playback SDK es una librería **JavaScript de
