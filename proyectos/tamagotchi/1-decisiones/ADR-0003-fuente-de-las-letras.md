@@ -1,9 +1,9 @@
 # ADR-0003 — De dónde salen las letras de las canciones
 
-- **Estado:** `Propuesto` ⚠️ *(no se decide hasta la fase 5 — falta verificar)*
+- **Estado:** `Aceptado` ✅ *(decidido el 2026-08-29, tras verificar la API)*
 - **Fecha:** 2026-08-29
 - **Reemplaza a:** —
-- **Relacionado con:** RF-04, ADR-0002
+- **Relacionado con:** RF-04, ADR-0002, supuesto S-05
 
 ---
 
@@ -40,16 +40,19 @@ la encuentres a mitad del proyecto.
   reproducción). Ese dato es justamente lo que hace falta para sincronizar una
   letra `.lrc`. Así que la mitad del rompecabezas ya la tenemos.
 
-**Lo que asumimos sin verificar (todo esto es la fase 5):**
+**Verificado el 2026-08-29** (ver [investigación](../5-investigacion/lrclib-api.md)):
 
-- ⚠️ Que LRCLIB sigue en línea, es gratis y no pide autenticación.
-- ⚠️ Qué tanta cobertura tiene para la música que escuchas. Para música muy
-  nicho puede simplemente no haber letra.
-- ⚠️ Que se puede cruzar una canción de Spotify con la letra correcta usando
-  artista + título + álbum + duración, sin equivocarse de versión (en vivo,
-  remaster, edición deluxe…).
-- Que una letra completa cabe en la memoria del ESP32. Una canción puede tener
-  40+ líneas; probablemente haya que ir pidiendo por trozos.
+- ✅ **LRCLIB está en línea, es gratis y NO pide autenticación.** Petición pelada,
+  sin ninguna clave → HTTP 200. Cero OAuth que implementar.
+- ✅ **Cobertura suficiente.** De las canciones probadas por el usuario, casi
+  todas están. La única que parecía faltar (`If` de Red Hot Chili Peppers) sí
+  estaba, con 8 versiones y letra sincronizada.
+- ✅ **El cruce funciona, y la clave es la duración.** El 404 inicial lo causó una
+  duración equivocada, no el nombre del álbum. Y la duración es justo lo que
+  Spotify da con precisión en `duration_ms`.
+- ⚠️ **Una letra completa sí cabe** (~5 KB por canción), **pero la búsqueda amplia
+  no**: `/api/search` devuelve 91–115 KB porque incluye la letra completa de 20
+  resultados. Eso es más de la mitad de la memoria libre del ESP32.
 
 **Lo que quedó pendiente de averiguar:**
 
@@ -99,22 +102,58 @@ Guardar en el ESP32 las letras de un puñado de canciones favoritas.
 
 ## Decisión
 
-⚠️ **Pendiente hasta la fase 5.** No se decide todavía porque la información
-clave no está verificada.
+**LRCLIB (opción A), con una estrategia de dos pasos.**
 
-**La dirección propuesta, en dos pasos:**
+Se descarta la idea previa de empezar con letras precargadas a mano (opción D).
+Tenía sentido cuando no sabíamos si la API servía; ahora que está verificada, ese
+rodeo solo duplicaría trabajo.
 
-1. **Primero, opción D** — una o dos letras metidas a mano en el código, para
-   resolver el problema visual: cuántos caracteres caben, cómo se corta el texto,
-   cómo se sincroniza con `progress_ms`, si se lee cómodo. Este es el problema
-   difícil de verdad y no necesita ninguna API para atacarse.
-2. **Después, opción A (LRCLIB)** — una vez que sepamos que la letra *se ve
-   bien*, conectarla a una fuente real.
+### Cómo se busca
 
-El motivo de partirlo así es el mismo del ADR-0002: no pelear dos problemas
-difíciles a la vez. "Conseguir la letra" y "mostrar la letra bien en una pantalla
-diminuta" son problemas independientes, y el segundo se puede resolver primero
-sin depender de nada.
+```mermaid
+graph TD
+    A["Spotify nos da:<br/>título · artista · álbum · duration_ms"] --> B["/api/get exacto<br/>≈5 KB"]
+    B -->|"200 ✅"| C["Letra lista"]
+    B -->|"404"| D["/api/search leyendo AL VUELO,<br/>quedándose solo con id y duration"]
+    D --> E["Elegir el id cuya duración<br/>más se parezca"]
+    E --> F["/api/get/&lt;id&gt; ≈8 KB"]
+    F --> C
+    D -->|"nada"| G["Estado 'sin letra'"]
+
+    style B fill:#2d4a2d,color:#fff
+    style G fill:#5a4a2d,color:#fff
+```
+
+**El camino normal es el primero**, y cuesta 5 KB. Funciona porque Spotify nos da
+la duración exacta. El rodeo solo hace falta con versiones cuya duración no
+cuadre: remasterizaciones, ediciones deluxe, grabaciones en vivo.
+
+### Por qué el rodeo no revienta la memoria
+
+`/api/search` devuelve 91 KB porque incluye la letra completa de 20 resultados.
+Cargarlo entero sería temerario. En su lugar se lee **al vuelo**, con un filtro
+de ArduinoJson que descarta las letras y conserva solo `id` y `duration` — unos
+cientos de bytes. Con el `id` elegido se pide la canción concreta, que sí cabe.
+
+Es exactamente la misma técnica que ya se usa con el JSON de Spotify, y la
+tercera vez que el filtro de ArduinoJson salva el proyecto.
+
+### "Sin letra" es un estado normal, no un error
+
+LRCLIB es comunitaria y **habrá huecos**. También hay canciones marcadas como
+`instrumental`, que no tienen letra por naturaleza.
+
+En ambos casos el aparato debe **seguir mostrando canción, artista y progreso**,
+e indicar en el hueco de la letra que no hay. Nunca dejar la pantalla en blanco
+ni congelada.
+
+Distinguir los tres casos importa:
+
+| Situación | Qué mostrar |
+|---|---|
+| Hay letra | La letra, sincronizada |
+| `instrumental: true` | "instrumental" — no es un fallo |
+| No se encontró | "sin letra" — puede que alguien la aporte algún día |
 
 ## Consecuencias
 
@@ -144,5 +183,9 @@ sin depender de nada.
 
 **Barato**, si el código se estructura bien. Si la parte que dibuja la letra
 recibe una lista de líneas con sus tiempos, sin saber de dónde salió, cambiar de
-fuente es cambiar una función. Es la misma separación que propone el ADR-0002:
-*de dónde vienen los datos* separado de *cómo se dibujan*.
+fuente es cambiar una función.
+
+Es la misma separación *"de dónde vienen los datos"* contra *"cómo se dibujan"*
+que ya pedían los ADRs [0002](ADR-0002-como-obtener-datos-de-spotify.md),
+[0004](ADR-0004-pantalla-gmt130.md) y [0008](ADR-0008-libreria-de-pantalla.md).
+Cinco razones independientes apuntando a la misma estructura.

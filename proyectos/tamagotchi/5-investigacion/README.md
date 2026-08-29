@@ -11,14 +11,10 @@ mal"* de *"esto funcionaba y cambió"*.
 
 ## 🔴 Pendientes, en orden de urgencia
 
-### 1. ¿Qué cobertura de letras hay para tu música?
+### ~~1. ¿Qué cobertura de letras hay para tu música?~~ ✅ RESUELTO
 
-Supuesto [S-05](../4-requerimientos/REQUERIMIENTOS.md#supuestos), ligado al
-[ADR-0003](../1-decisiones/ADR-0003-fuente-de-las-letras.md).
-
-Prueba barata que puedes hacer tú, sin programar: buscar en LRCLIB, desde el
-navegador, **5 canciones que de verdad escuches**. Si tres no aparecen, hay que
-replantear el RF-04 antes de invertirle tiempo.
+Verificado el 2026-08-29 → [`lrclib-api.md`](lrclib-api.md). Hay cobertura
+suficiente y la API no pide autenticación.
 
 ### 2. ¿Cómo se validan los certificados raíz TLS? (futuro ADR-0009)
 
@@ -33,6 +29,22 @@ lo toque.
 ---
 
 ## ✅ Hallazgos
+
+### 2026-08-29 — ✅ LRCLIB sirve, y la duración es la clave del cruce (resuelve S-05)
+
+**Qué se averiguó:** LRCLIB no pide autenticación, es gratis y tiene buena
+cobertura. La canción que parecía faltar (`If`, Red Hot Chili Peppers) **sí
+estaba**, con 8 versiones y letra sincronizada — el 404 lo causaba una **duración
+equivocada**, no el nombre del álbum.
+⚠️ Descubierto además: `/api/search` devuelve **91–115 KB** porque incluye la
+letra completa de 20 resultados. `/api/get` exacto son solo **5 KB**.
+**Fuente:** consultas reales a la API — ver [`lrclib-api.md`](lrclib-api.md).
+**Por qué importa:** era el último supuesto abierto de los nueve. Y la duración,
+que es el dato decisivo, es justo el que Spotify da con precisión.
+**Confianza:** máxima (medido, no leído).
+**Consecuencia:** [ADR-0003](../1-decisiones/ADR-0003-fuente-de-las-letras.md)
+aceptado, con búsqueda en dos pasos para no cargar nunca los 91 KB.
+
 
 ### 2026-08-29 — La fuente legible a 60 cm es la 4, y eso recorta el texto disponible
 

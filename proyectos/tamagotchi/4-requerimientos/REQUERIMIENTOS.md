@@ -95,7 +95,7 @@ que el proyecto pueda terminarse:
 | S-02 | ~~La API de Spotify permite leer "reproduciendo ahora"~~ | ✅ **Resuelto** — sí, ver [investigación](../5-investigacion/spotify-api-2026.md) | — |
 | S-03 | ~~Hay una pantalla disponible~~ | ✅ **Resuelto** — 4× GMT130 240×240 en inventario | — |
 | S-04 | ~~El ESP32 tiene RAM suficiente para HTTPS~~ | ✅ **Resuelto** — mínimo 199.4 KB con TLS activo, sin fugas ni fragmentación | — |
-| S-05 | Existe una fuente gratuita de letras sincronizadas para tu música | ❌ No | Solo RF-04. El resto sobrevive |
+| S-05 | ~~Existe una fuente gratuita de letras sincronizadas~~ | ✅ **Resuelto** — LRCLIB, sin autenticación, buena cobertura ([investigación](../5-investigacion/lrclib-api.md)) | — |
 | S-06 | ~~El WiFi de casa es 2.4 GHz~~ | ✅ **Resuelto** — el ESP32 ve `INFINITUMEB00` a −39 dBm, canal 11 | — |
 | S-07 | ~~La GMT130 es 3.3 V y ST7789~~ | ✅ **Resuelto** — confirmado en la placa | — |
 | S-08 | ~~Faltan las resistencias CC en las placas USB-C~~ | ✅ **Descartado** — C-001 enumeró directo en el puerto USB-C. Era el cable |
@@ -125,6 +125,7 @@ que el proyecto pueda terminarse:
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
+| 2026-08-29 | S-05 resuelto — **los 9 supuestos cerrados**. ADR-0003 aceptado (LRCLIB) | La API verificada con consultas reales. La canción que parecía faltar sí estaba: el fallo era la duración |
 | 2026-08-29 | RF-01, RF-02, RF-03 y RF-05 ✅ HECHOS | La pantalla muestra canción, artista, álbum y progreso, en vivo |
 | 2026-08-29 | RNF-01 resuelto (fuente 4). El texto disponible baja a ~17 car. × 9 líneas | Medición perceptual en la pantalla real. Casi la mitad de lo estimado con fuente 8×16: aprieta el RF-04 |
 | 2026-08-29 | RF-01/02/03/05/06 con datos funcionando; riesgo de certificados mitigado | El ESP32 lee Spotify con certificado verificado. ADR-0009 cerrado |
