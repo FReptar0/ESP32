@@ -34,6 +34,42 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — 🎉 El ESP32 lee lo que suena en Spotify, con certificado verificado
+
+**Qué se logró:** la placa renueva su propio `access_token`, consulta
+`/me/player/currently-playing`, interpreta el JSON e imprime canción, artista,
+álbum y progreso. Todo con `Certificate validated` en cada conexión.
+**Fuente:** prueba propia, firmware pasos 5 y 6.
+**Confianza:** máxima — funcionando en la placa.
+**Consecuencia:** RF-01, RF-02, RF-03 y RF-05 quedan resueltos a nivel de datos.
+Falta llevarlos a la pantalla (paso 7).
+
+### 2026-08-29 — No hay fuga de memoria en el ciclo de consultas
+
+**Qué se averiguó:** la RAM baja 3.3 KB durante las primeras 16 consultas y
+**se estabiliza** en ~198.1 KB, oscilando ±130 B sin tendencia. Es calentamiento
+del heap, no una fuga.
+**Fuente:** prueba propia — ver [`memoria-en-regimen.md`](memoria-en-regimen.md).
+**Por qué importa:** con solo 5 muestras la conclusión habría sido "fuga" y
+habríamos rediseñado algo que no estaba roto. 🔑 Una fuga es **lineal e
+infinita**; el calentamiento es **asintótico**.
+**Confianza:** alta. Pendiente una prueba de 24 h.
+**Consecuencia:** respalda el RNF-06.
+
+### 2026-08-29 — Verificar certificados exige saber la fecha
+
+**Qué se averiguó:** un certificado declara "soy válido entre tal y tal fecha".
+El ESP32 arranca creyendo que estamos en 1970, así que **todos** los certificados
+le parecerían "aún no válidos" y toda conexión TLS fallaría.
+**Fuente:** conocido del protocolo, aplicado en el firmware.
+**Por qué importa:** el fallo se vería como un `connect()` que devuelve false,
+sin ninguna pista de la causa real.
+**Confianza:** máxima.
+**Consecuencia:** el firmware sincroniza por NTP y **espera** a que la hora sea
+creíble antes de cualquier TLS. Documentado en el
+[ADR-0009](../1-decisiones/ADR-0009-certificados-raiz.md).
+
+
 ### 2026-08-29 — El Python de python.org no usa el llavero de macOS
 
 **Qué se averiguó:** el intercambio de tokens falló con

@@ -244,7 +244,80 @@ tiene llavero de ningún tipo.
 la placa ejecutaba nuestro código— y a partir de ahí solo molesta en un aparato
 de escritorio.
 
+### 🎉 Pasos 4, 5 y 6 completados — el ESP32 lee Spotify
+
+```
+┌──────────────────────────────────────────────
+│ 🎵  Fashion Drunk
+│ 👤  Otis Stacks
+│ 💿  Otis Stacks
+└──────────────────────────────────────────────
+  ▶ [==============      ] 2:26 / 3:26   RAM: 201012 B
+```
+
+La placa renueva su propio `access_token` con el `refresh_token`, consulta
+`/me/player/currently-playing`, interpreta el JSON y saca canción, artista, álbum
+y progreso. Sola, sin la Mac de por medio. **Confirma el ADR-0002.**
+
+**Detalle técnico que vale la pena:** el JSON de Spotify trae 10 KB o más
+(imágenes, mercados, enlaces, popularidad). En vez de guardarlo entero se usa un
+**filtro de ArduinoJson**, que descarta lo que no interesa *mientras lee*. Gasto:
+unos cientos de bytes en vez de 10 KB.
+
+### 🔐 ADR-0009 cerrado: certificados verificados de verdad
+
+```
+[esp_crt_bundle.c] esp_crt_verify_callback(): Certificate validated
+```
+
+En cada conexión. Se descartó incrustar un certificado suelto (frágil: caduca o
+Spotify cambia de autoridad y el aparato muere solo un día) a favor del **paquete
+completo de 150 CAs de Mozilla**, generado desde `certifi` con un script propio
+porque el core no lo trae. 66.8 KB de flash.
+
+**Y una pieza que casi se nos escapa:** verificar un certificado exige saber qué
+día es hoy, y el ESP32 arranca en 1970 — todos los certificados le parecerían
+"aún no válidos". El firmware sincroniza por NTP y **espera** antes de intentar
+TLS.
+
+### 🔍 Falsa alarma de fuga de memoria (y cómo se resolvió)
+
+Las primeras 5 muestras bajaban ~230 B cada una. A ese ritmo la placa moriría en
+una hora, y el RNF-06 sería imposible.
+
+Se midió con 31 muestras en vez de 5:
+
+```
+201448 ... 198320 198120  ← baja 16 veces
+198116 198088 198128 ...  ← y se aplana
+```
+
+**No es fuga: es el calentamiento del heap.** Los buffers de TLS y de red crecen
+hasta su tamaño de trabajo y ahí se quedan.
+
+🔑 **La lección:** una fuga es **lineal e infinita**; el calentamiento es
+**asintótico**. Cinco muestras no distinguen una cosa de la otra; treinta sí. Con
+5 habríamos rediseñado algo que no estaba roto.
+
+Detalle en [`5-investigacion/memoria-en-regimen.md`](5-investigacion/memoria-en-regimen.md).
+
 ### 🔜 En qué me quedé — siguiente sesión
+
+**Paso 7: la pantalla.** Es lo único que falta para cerrar RF-01, RF-02 y RF-03
+— los datos ya están, solo hay que dibujarlos. Toca:
+
+1. Cablear la GMT130 siguiendo [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md)
+2. Decidir el ADR-0008 (`TFT_eSPI` vs `Adafruit_ST7789`)
+3. Diseñar cómo se ve: qué va grande, qué chico, qué colores
+
+**Pendientes menores:**
+- Prueba de resistencia de 24 h para cerrar el RNF-06 del todo.
+- Timeout en la sincronización NTP: hoy, si el router bloquea el puerto 123, el
+  arranque se queda esperando para siempre.
+- S-05: probar a mano en LRCLIB 5 canciones que escuches, para saber si el RF-04
+  (letras) es viable antes de invertirle tiempo.
+
+### 📜 Historial anterior de la sesión
 
 **Paso 4 — OAuth.** Falta terminar de crear la app en el dashboard de Spotify
 (con ese Redirect URI) y hacer el baile de autorización una vez desde la Mac,

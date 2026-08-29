@@ -31,12 +31,12 @@ eso es esperado, no un problema.
 
 | ID | Requerimiento | Prioridad | Criterio de aceptación | Estado |
 |---|---|---|---|---|
-| RF-01 | Mostrar el **título** de la canción que suena | Debe | Cambio de canción en Spotify → el título nuevo aparece en pantalla en < 10 s, sin tocar nada | 🔲 Pendiente |
-| RF-02 | Mostrar el **álbum** al que pertenece | Debe | El nombre del álbum se ve junto al título, sin cortar información crítica | 🔲 Pendiente |
-| RF-03 | Mostrar el **artista** | Debería | Se distingue claramente del título | 🔲 Pendiente |
+| RF-01 | Mostrar el **título** de la canción que suena | Debe | Cambio de canción en Spotify → el título nuevo aparece en pantalla en < 10 s, sin tocar nada | 🟡 Datos OK, falta pantalla |
+| RF-02 | Mostrar el **álbum** al que pertenece | Debe | El nombre del álbum se ve junto al título, sin cortar información crítica | 🟡 Datos OK, falta pantalla |
+| RF-03 | Mostrar el **artista** | Debería | Se distingue claramente del título | 🟡 Datos OK, falta pantalla |
 | RF-04 | Mostrar la **letra** sincronizada con la canción | Debería | La línea en pantalla corresponde a lo que se está cantando, con < 2 s de desfase | 🔲 Pendiente |
-| RF-05 | Conectarse a WiFi solo, al encender | Debe | Se enchufa y a los < 30 s ya está mostrando algo, sin intervención | 🔲 Pendiente |
-| RF-06 | Indicar visualmente cuando **no** hay nada sonando | Debe | Pantalla en reposo distinguible, no la última canción congelada | 🔲 Pendiente |
+| RF-05 | Conectarse a WiFi solo, al encender | Debe | Se enchufa y a los < 30 s ya está mostrando algo, sin intervención | 🟡 Datos OK, falta pantalla |
+| RF-06 | Indicar visualmente cuando **no** hay nada sonando | Debe | Pantalla en reposo distinguible, no la última canción congelada | 🟡 Datos OK, falta pantalla |
 | RF-07 | Indicar visualmente cuando **perdió la conexión** | Debería | Se distingue "no hay música" de "no hay internet" — son problemas distintos | 🔲 Pendiente |
 | RF-08 | **Pausar y reanudar** la reproducción desde el aparato | Podría | Un control físico pausa lo que suena en el celular o la Mac en < 2 s | 🔲 Pendiente |
 | RF-09 | **Saltar** a la canción siguiente o anterior | Podría | Igual que RF-08, con siguiente/anterior | 🔲 Pendiente |
@@ -51,7 +51,7 @@ eso es esperado, no un problema.
 | RNF-03 | Cabe en un escritorio | < 10 × 10 × 10 cm aprox. | Medir |
 | RNF-04 | El proyecto se puede recompilar dentro de un año y funciona igual | Versiones fijadas en `platformio.ini` | Ver [ADR-0001](../1-decisiones/ADR-0001-plataforma-de-desarrollo.md) |
 | RNF-05 | Las credenciales no acaban en ningún repositorio | 0 secretos en Git | `.gitignore` + revisión antes de cada commit |
-| RNF-06 | Funciona indefinidamente sin reiniciarlo a mano | > 7 días encendido sin colgarse | Dejarlo prendido una semana |
+| RNF-06 | Funciona indefinidamente sin reiniciarlo a mano | > 7 días encendido sin colgarse | 🟡 Sin fugas confirmado en 31 ciclos ([medición](../5-investigacion/memoria-en-regimen.md)). Falta la prueba de 24 h |
 
 ---
 
@@ -115,7 +115,7 @@ que el proyecto pueda terminarse:
 | Superar el límite de peticiones (429) | Media | Bajo | Spotify no publica el número. Consultar cada 5 s y respetar siempre `Retry-After` |
 | El texto se ve nítido pero demasiado chico para leerlo a 60 cm | Media | Medio | 240 px en 1.3" = píxeles diminutos. Se resuelve con fuentes más grandes, sacrificando caracteres. Ver [ADR-0004](../1-decisiones/ADR-0004-pantalla-gmt130.md) |
 | ~~El ESP32 se queda sin memoria con TLS~~ | — | — | ✅ Medido 2026-08-29: 199.4 KB de margen, sin fugas |
-| **Los certificados raíz TLS caducan** | Baja | Alto | 🎯 **Riesgo #1 actual.** Único caso donde el aparato deja de funcionar solo, sin que nadie toque nada. Se decide en el futuro ADR-0009 |
+| ~~Los certificados raíz TLS caducan~~ | Muy baja | Alto | ✅ Mitigado por el [ADR-0009](../1-decisiones/ADR-0009-certificados-raiz.md): paquete de 150 CAs de Mozilla, no un certificado suelto |
 | El alcance crece y el proyecto no termina | **Alta** | Medio | La lista de "fuera de alcance" de arriba. Revisarla cada vez que aparezca una idea nueva |
 
 ---
@@ -125,6 +125,7 @@ que el proyecto pueda terminarse:
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
+| 2026-08-29 | RF-01/02/03/05/06 con datos funcionando; riesgo de certificados mitigado | El ESP32 lee Spotify con certificado verificado. ADR-0009 cerrado |
 | 2026-08-29 | Controlar Spotify pasa de fuera de alcance a RF-08/09/10 | Decisión del usuario. Se piden los permisos desde ya para no repetir OAuth ([ADR-0010](../1-decisiones/ADR-0010-permisos-de-spotify.md)) |
 | 2026-08-29 | S-04 resuelto — el punto de control del ADR-0002 pasó con 199.4 KB de margen | Spike de memoria con TLS contra el servidor real de Spotify. La arquitectura directa se confirma |
 | 2026-08-29 | S-06 resuelto; S-04 con línea base medida | Primer firmware cargado con éxito: 303.5 KB de RAM libre y red de 2.4 GHz confirmada a −39 dBm |

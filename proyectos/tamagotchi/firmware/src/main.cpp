@@ -1,179 +1,257 @@
 /*
  * ============================================================
- *  Tamagotchi Spotify — Pasos 2 y 3
+ *  Tamagotchi Spotify — Pasos 5 y 6
  * ============================================================
- *  PASO 2: conectarse a la red WiFi.
- *  PASO 3: hacer una conexión HTTPS real y MEDIR LA MEMORIA.
+ *  PASO 5: el ESP32 renueva su propio access_token usando el
+ *          refresh_token, sin ayuda de nadie.
+ *  PASO 6: pregunta qué canción suena y la interpreta.
  *
- *  El paso 3 es el punto de control de todo el proyecto
- *  (ADR-0002, supuesto S-04). La pregunta que responde es:
- *
- *      ¿Le queda al ESP32 memoria suficiente para hablar
- *       con Spotify por su cuenta, o necesitamos un puente
- *       corriendo en la Mac?
- *
- *  Si la respuesta es "no alcanza", hay que reabrir el ADR-0002
- *  ANTES de escribir una sola línea de lógica de Spotify.
- *  Por eso se mide primero.
+ *  Todo con el certificado del servidor VERIFICADO (ADR-0009).
  * ============================================================
  */
 
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include "mbedtls/base64.h"
 #include "secrets.h"
 
-const int LED = 2;
+// El paquete de certificados raíz queda incrustado en la memoria flash.
+// Este nombre rarísimo lo genera el compilador a partir de la ruta del
+// archivo (data/cert/x509_crt_bundle.bin -> _binary_data_cert_..._bin_start).
+extern const uint8_t rootca_crt_bundle_start[] asm("_binary_data_cert_x509_crt_bundle_bin_start");
 
-// Nos conectamos al servidor REAL de Spotify (el de los tokens),
-// no a un sitio cualquiera. Medir contra el destino verdadero
-// da un número que sí sirve.
-const char* HOST = "accounts.spotify.com";
-const int   PORT = 443;
+const char* URL_TOKEN  = "https://accounts.spotify.com/api/token";
+const char* URL_CANCION = "https://api.spotify.com/v1/me/player/currently-playing";
 
-// -------- Utilidad para imprimir la memoria en cada etapa --------
-void memoria(const char* etapa) {
-  Serial.printf("  %-28s libre: %6lu B (%5.1f KB) | bloque mayor: %6lu B\n",
-                etapa,
-                (unsigned long)ESP.getFreeHeap(),
-                ESP.getFreeHeap() / 1024.0,
-                (unsigned long)ESP.getMaxAllocHeap());
+const unsigned long CADA_CUANTO_MS = 5000;   // consultar cada 5 s (ver investigación)
+
+String accessToken;
+unsigned long tokenCaducaEn = 0;   // millis() en que hay que renovarlo
+String ultimaCancion;              // para detectar cambios y no repetir en pantalla
+
+// ---------------------------------------------------------------
+//  Prepara un cliente TLS que SÍ verifica al servidor
+// ---------------------------------------------------------------
+void prepararTLS(WiFiClientSecure& c) {
+  // Esta línea es todo el ADR-0009. Sin ella habría que usar
+  // setInsecure(), que acepta a cualquiera que diga ser Spotify —
+  // y por esta conexión viajan nuestros tokens.
+  c.setCACertBundle(rootca_crt_bundle_start);
 }
 
-// ================= PASO 2 =================
-bool conectarWiFi() {
-  Serial.println("=== PASO 2 · Conectando a WiFi ===");
-  Serial.printf("  Red: %s\n", WIFI_SSID);
+// ---------------------------------------------------------------
+//  PASO 5 · Renovar el access_token
+// ---------------------------------------------------------------
+bool renovarToken() {
+  Serial.println("\n[Token] Renovando access_token...");
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  // Spotify quiere las credenciales como "Basic <id:secret en base64>".
+  // base64 NO es cifrado, solo una forma de escribir bytes con letras.
+  // Por eso todo esto va obligatoriamente por HTTPS.
+  String credenciales = String(SPOTIFY_CLIENT_ID) + ":" + String(SPOTIFY_CLIENT_SECRET);
+  unsigned char b64[256];
+  size_t b64Len = 0;
+  mbedtls_base64_encode(b64, sizeof(b64), &b64Len,
+                        (const unsigned char*)credenciales.c_str(), credenciales.length());
+  String basic = String((char*)b64).substring(0, b64Len);
 
-  // 20 segundos de paciencia. Sin timeout, un error de contraseña
-  // dejaría la placa colgada para siempre sin decir por qué.
-  unsigned long inicio = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - inicio < 20000) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
+  WiFiClientSecure cliente;
+  prepararTLS(cliente);
 
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("  ❌ No se pudo conectar.");
-    Serial.println("     Causas típicas, en orden:");
-    Serial.println("       1. La contraseña en secrets.h está mal");
-    Serial.println("       2. La red es de 5 GHz (el ESP32 solo ve 2.4 GHz)");
-    Serial.println("       3. El nombre de la red tiene un typo");
+  HTTPClient https;
+  if (!https.begin(cliente, URL_TOKEN)) {
+    Serial.println("[Token] ❌ No se pudo iniciar la conexión");
     return false;
   }
 
-  Serial.println("  ✅ Conectado");
-  Serial.printf("     IP asignada : %s\n", WiFi.localIP().toString().c_str());
-  Serial.printf("     Puerta enlace: %s\n", WiFi.gatewayIP().toString().c_str());
-  Serial.printf("     Señal        : %d dBm\n", WiFi.RSSI());
+  https.addHeader("Authorization", "Basic " + basic);
+  https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+  String cuerpo = "grant_type=refresh_token&refresh_token=" + String(SPOTIFY_REFRESH_TOKEN);
+  int codigo = https.POST(cuerpo);
+
+  if (codigo != 200) {
+    Serial.printf("[Token] ❌ Spotify respondió %d\n", codigo);
+    if (codigo > 0) Serial.println("  " + https.getString());
+    if (codigo < 0) Serial.println("  (código negativo = falló la conexión, no la petición)");
+    https.end();
+    return false;
+  }
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, https.getStream());
+  https.end();
+
+  if (err) {
+    Serial.printf("[Token] ❌ JSON ilegible: %s\n", err.c_str());
+    return false;
+  }
+
+  accessToken = doc["access_token"].as<String>();
+  long duracion = doc["expires_in"] | 3600;
+
+  // Se renueva 5 minutos ANTES de que caduque. Apurar hasta el último
+  // segundo garantizaría fallos justo en el límite.
+  tokenCaducaEn = millis() + (duracion - 300) * 1000UL;
+
+  Serial.printf("[Token] ✅ Renovado. Válido %ld s (se renovará en %ld s)\n",
+                duracion, duracion - 300);
   return true;
 }
 
-// ================= PASO 3 =================
-void probarHTTPS() {
-  Serial.println();
-  Serial.println("=== PASO 3 · Prueba de HTTPS y medición de memoria ===");
-  Serial.println("  (Esto responde el supuesto S-04, riesgo #1 del proyecto)");
-  Serial.println();
+// ---------------------------------------------------------------
+//  PASO 6 · Preguntar qué suena
+// ---------------------------------------------------------------
+void consultarCancion() {
+  WiFiClientSecure cliente;
+  prepararTLS(cliente);
 
-  memoria("Antes de nada");
+  HTTPClient https;
+  if (!https.begin(cliente, URL_CANCION)) return;
+  https.addHeader("Authorization", "Bearer " + accessToken);
 
-  // El objeto seguro se crea en el heap: aquí empieza el gasto.
-  WiFiClientSecure* cliente = new WiFiClientSecure;
+  int codigo = https.GET();
 
-  // ⚠️ setInsecure() = NO verificar el certificado del servidor.
-  //    Para ESTA medición está bien: el handshake TLS ocurre igual
-  //    y es lo que consume la memoria. Pero para el firmware final
-  //    hay que validar el certificado — eso es el futuro ADR-0009.
-  cliente->setInsecure();
-  memoria("Objeto TLS creado");
-
-  Serial.printf("\n  Conectando a %s:%d ...\n", HOST, PORT);
-  unsigned long t0 = millis();
-
-  if (!cliente->connect(HOST, PORT)) {
-    Serial.println("  ❌ Falló la conexión TLS.");
-    memoria("Tras el fallo");
-    delete cliente;
+  // 204 = "no hay nada sonando". No es un error: es una respuesta
+  // legítima que hay que distinguir de "se cayó internet" (RF-06 vs RF-07).
+  if (codigo == 204) {
+    if (ultimaCancion != "") {
+      Serial.println("\n⏸  No hay nada sonando");
+      ultimaCancion = "";
+    }
+    https.end();
     return;
   }
 
-  unsigned long ms = millis() - t0;
-  Serial.printf("  ✅ Handshake TLS completado en %lu ms\n\n", ms);
-  memoria("TLS conectado  <-- CLAVE");
-
-  // Petición HTTP mínima, solo para confirmar que fluyen datos.
-  cliente->printf("GET / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", HOST);
-
-  // Leemos solo la primera línea: nos basta para saber que respondió.
-  String primeraLinea = cliente->readStringUntil('\n');
-  Serial.printf("\n  Respuesta del servidor: %s\n", primeraLinea.c_str());
-
-  size_t bytes = 0;
-  while (cliente->connected() || cliente->available()) {
-    if (cliente->available()) { cliente->read(); bytes++; }
-    else break;
+  if (codigo == 401) {
+    Serial.println("[API] Token caducado, renovando...");
+    https.end();
+    renovarToken();
+    return;
   }
-  Serial.printf("  Bytes recibidos: %u\n\n", (unsigned)bytes);
-  memoria("Con la respuesta leída");
 
-  cliente->stop();
-  delete cliente;
-  delay(100);
-  memoria("Tras cerrar y liberar");
+  if (codigo == 429) {
+    // Nos pasamos del límite de peticiones. Spotify dice cuánto esperar.
+    String espera = https.header("Retry-After");
+    Serial.printf("[API] ⚠️ Límite alcanzado. Esperar %s s\n", espera.c_str());
+    https.end();
+    delay((espera.toInt() + 1) * 1000UL);
+    return;
+  }
 
-  // ---- El veredicto ----
-  Serial.println();
-  Serial.println("  ---------------- VEREDICTO ----------------");
-  Serial.printf("  Mínimo histórico de RAM libre: %lu B (%.1f KB)\n",
-                (unsigned long)ESP.getMinFreeHeap(), ESP.getMinFreeHeap() / 1024.0);
-  Serial.println("  ^ Este es EL número: el peor momento por el que pasó");
-  Serial.println("    la placa, aunque durara un instante.");
-  Serial.println();
-  Serial.println("  Regla de lectura:");
-  Serial.println("    > 100 KB  -> sobra. Adelante con el plan directo.");
-  Serial.println("    50-100 KB -> alcanza, pero hay que cuidar el JSON.");
-  Serial.println("    < 50 KB   -> apretado. Reabrir el ADR-0002.");
-  Serial.println("  -------------------------------------------");
+  if (codigo != 200) {
+    Serial.printf("[API] ❌ Respuesta %d\n", codigo);
+    https.end();
+    return;
+  }
+
+  // ---- Filtro: la clave para no quedarnos sin memoria ----
+  // La respuesta de Spotify trae MUCHÍSIMO más de lo que necesitamos:
+  // imágenes, mercados disponibles, enlaces, popularidad... Fácilmente
+  // 10 KB o más.
+  //
+  // Este filtro le dice a ArduinoJson qué campos conservar. Todo lo
+  // demás se descarta MIENTRAS se lee, sin llegar a ocupar memoria.
+  // Es la diferencia entre gastar ~10 KB y gastar unos cientos de bytes.
+  JsonDocument filtro;
+  filtro["is_playing"] = true;
+  filtro["progress_ms"] = true;
+  filtro["item"]["name"] = true;
+  filtro["item"]["duration_ms"] = true;
+  filtro["item"]["album"]["name"] = true;
+  filtro["item"]["artists"][0]["name"] = true;
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, https.getStream(),
+                                             DeserializationOption::Filter(filtro));
+  https.end();
+
+  if (err) {
+    Serial.printf("[API] ❌ JSON ilegible: %s\n", err.c_str());
+    return;
+  }
+
+  const char* titulo = doc["item"]["name"]  | "(desconocido)";
+  const char* album  = doc["item"]["album"]["name"] | "(desconocido)";
+  const char* artista = doc["item"]["artists"][0]["name"] | "(desconocido)";
+  long progreso = doc["progress_ms"] | 0;
+  long duracion = doc["item"]["duration_ms"] | 0;
+  bool sonando = doc["is_playing"] | false;
+
+  String cancion = String(titulo) + "|" + String(artista);
+  bool esNueva = (cancion != ultimaCancion);
+  ultimaCancion = cancion;
+
+  if (esNueva) {
+    Serial.println();
+    Serial.println("┌──────────────────────────────────────────────");
+    Serial.printf("│ 🎵  %s\n", titulo);
+    Serial.printf("│ 👤  %s\n", artista);
+    Serial.printf("│ 💿  %s\n", album);
+    Serial.println("└──────────────────────────────────────────────");
+  }
+
+  // Barra de progreso, para ver que progress_ms avanza de verdad —
+  // que es el dato que después sincronizará las letras (RF-04).
+  if (duracion > 0) {
+    int llenos = (progreso * 20) / duracion;
+    Serial.printf("\r  %s [", sonando ? "▶" : "⏸");
+    for (int i = 0; i < 20; i++) Serial.print(i < llenos ? "=" : " ");
+    Serial.printf("] %ld:%02ld / %ld:%02ld   RAM: %lu B  ",
+                  progreso / 60000, (progreso / 1000) % 60,
+                  duracion / 60000, (duracion / 1000) % 60,
+                  (unsigned long)ESP.getFreeHeap());
+  }
 }
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  pinMode(LED, OUTPUT);
+  pinMode(2, OUTPUT);
+  digitalWrite(2, LOW);   // LED apagado: sin parpadeo
 
-  Serial.println();
-  Serial.println("############################################");
-  Serial.println("#  Tamagotchi Spotify — Pasos 2 y 3        #");
-  Serial.println("############################################");
-  Serial.println();
+  Serial.println("\n############################################");
+  Serial.println("#  Tamagotchi Spotify — Pasos 5 y 6        #");
+  Serial.println("############################################\n");
 
-  if (conectarWiFi()) {
-    probarHTTPS();
-  } else {
-    Serial.println("\n  Sin WiFi no se puede probar HTTPS. Revisa secrets.h.");
-  }
+  Serial.printf("Conectando a %s ", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.printf(" ✅ %s\n", WiFi.localIP().toString().c_str());
 
-  Serial.println("\n=== Fin de la prueba ===");
-  Serial.println("La placa se queda en reposo, sin parpadear.");
+  // ⚠️ IMPRESCINDIBLE antes de verificar certificados.
+  //
+  // Un certificado dice "soy válido entre tal fecha y tal otra". Para
+  // comprobarlo hay que saber qué día es hoy — y el ESP32 arranca creyendo
+  // que estamos en 1970. Sin esto, TODOS los certificados parecerían
+  // "todavía no válidos" y la conexión fallaría sin explicar por qué.
+  Serial.print("Sincronizando la hora por NTP ");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  time_t ahora = 0;
+  while (ahora < 1700000000) { delay(500); Serial.print("."); time(&ahora); }
+  Serial.printf(" ✅ %s", ctime(&ahora));
+
+  Serial.println("Certificados: paquete de Mozilla incrustado (150 CAs)");
+
+  renovarToken();
 }
 
 void loop() {
-  // Sin parpadeo: ya cumplió su función.
-  //
-  // El parpadeo existía para el paso 1, como prueba de que la placa
-  // ejecutaba NUESTRO código y no algo que ya venía de fábrica. Eso ya
-  // quedó demostrado, y a partir de aquí solo molesta: este aparato va a
-  // vivir en un escritorio.
-  //
-  // Ojo con el detalle: el LED está en el GPIO2, que es uno de los pines
-  // que el ESP32 lee al arrancar para decidir cómo bootear (strapping pin).
-  // Por eso la tabla de conexiones de la pantalla no usa el GPIO2 —
-  // ver 6-esquemas/conexiones-fisicas.md.
-  digitalWrite(LED, LOW);
-  delay(1000);
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\n[WiFi] Reconectando...");
+    WiFi.reconnect();
+    delay(5000);
+    return;
+  }
+
+  if (accessToken == "" || millis() > tokenCaducaEn) {
+    if (!renovarToken()) { delay(30000); return; }
+  }
+
+  consultarCancion();
+  delay(CADA_CUANTO_MS);
 }
