@@ -22,11 +22,20 @@
 
 const int ANCHO_ICONO = 15;
 
+// Separador entre el nombre de la playlist y su descripción. Un guion
+// se perdía: a 14 px es una raya de tres píxeles entre dos textos grises.
+// Un punto es más redondo, se ve mejor y el propio ancho del icono ya
+// deja aire a los lados.
+#define SEPARADOR "  \x0E  "
+
 inline uint16_t colorDeIcono(char c, uint16_t porDefecto) {
   switch (c) {
     case MARCA_COR_ROJO: return TFT_RED;
-    case MARCA_COR_MOR:  return 0x915C;   // morado
-    case MARCA_COR_AZUL: return 0x1C9F;
+    // Ojo con el morado en RGB565: 0x915C daba RGB(148,40,230) — con
+    // 230 de azul contra 148 de rojo, el ojo lo lee como azulado.
+    // Subiendo el rojo a 197 el violeta se reconoce de inmediato.
+    case MARCA_COR_MOR:  return 0xC1FD;   // violeta vivo RGB(197,61,239)
+    case MARCA_COR_AZUL: return 0x2D5F;   // azul claro, para que no se confunda con el violeta
     case MARCA_COR_VERD: return 0x2E6A;
     case MARCA_COR_AMAR: return 0xFD20;   // ámbar
     case MARCA_COR_NEGR: return 0x4208;   // gris muy oscuro (negro no se vería)

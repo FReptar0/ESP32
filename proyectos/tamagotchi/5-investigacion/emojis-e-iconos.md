@@ -101,3 +101,41 @@ eligió `TFT_eSPI` en el [ADR-0008](../1-decisiones/ADR-0008-libreria-de-pantall
 
 El texto se repite tras un hueco, para que el bucle se vea continuo en vez de
 dar un salto al reiniciarse.
+
+
+---
+
+## Ajuste de color — el morado se veía azul
+
+El primer violeta elegido fue `0x915C`. Descompuesto:
+
+```
+0x915C -> RGB(148, 40, 230)
+             rojo      azul
+```
+
+**230 de azul contra 148 de rojo.** Técnicamente es morado, pero con esa
+proporción el ojo lo lee como azulado — sobre todo en una figura pequeña, donde
+hay pocos píxeles para juzgar el tono.
+
+Corregido a `0xC1FD` → **RGB(197, 61, 239)**. Al subir el rojo de 148 a 197, el
+azul deja de dominar y el violeta se reconoce de inmediato.
+
+De paso se aclaró el azul del 💙 (`0x1C9F` → `0x2D5F`), para que no se confunda
+con el violeta nuevo.
+
+🔑 **Con figuras pequeñas hay que exagerar el tono.** Un color "correcto" sobre el
+papel puede leerse mal cuando solo ocupa 12 × 12 píxeles: el ojo tiene menos
+información para decidir, y se va al canal dominante.
+
+## El separador: un guion no se veía
+
+Entre el nombre de la playlist y su descripción había un `-`. A 14 píxeles de
+alto, un guion es **una raya de tres píxeles entre dos textos grises**: se pierde.
+
+Sustituido por un **punto dibujado**, reutilizando el mismo icono que se usa para
+los emojis desconocidos. Dos ventajas:
+
+- Es redondo y se ve, aunque sea pequeño.
+- El icono ya mide 15 px de ancho con el punto centrado, así que **el aire a los
+  lados sale gratis** — que era el otro problema: la descripción quedaba pegada.

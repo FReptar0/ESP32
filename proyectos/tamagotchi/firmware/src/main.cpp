@@ -187,9 +187,9 @@ void pintarContenidoBarra(int off, uint16_t colorNombre) {
   int x = -off;
   x += dibujarMixto(barraSpr, nombreContexto, x, 2, colorNombre);
   if (descContexto.length()) {
-    // La descripción va en un tono más apagado, separada por un guion:
+    // La descripción va en un tono más apagado, separada por un punto:
     // se lee como información secundaria sin competir con el nombre.
-    x += dibujarMixto(barraSpr, " - ", x, 2, GRIS_OSCURO);
+    x += dibujarMixto(barraSpr, SEPARADOR, x, 2, GRIS);
     x += dibujarMixto(barraSpr, descContexto, x, 2, GRIS);
   }
   // Si el texto se desplaza, se repite tras un hueco para que el bucle
@@ -199,7 +199,7 @@ void pintarContenidoBarra(int off, uint16_t colorNombre) {
     if (x2 < BARRA_ANCHO) {
       x2 += dibujarMixto(barraSpr, nombreContexto, x2, 2, colorNombre);
       if (descContexto.length()) {
-        x2 += dibujarMixto(barraSpr, " - ", x2, 2, GRIS_OSCURO);
+        x2 += dibujarMixto(barraSpr, SEPARADOR, x2, 2, GRIS);
         dibujarMixto(barraSpr, descContexto, x2, 2, GRIS);
       }
     }
@@ -214,7 +214,7 @@ void barraEstado(bool reproduciendo, uint16_t color) {
     barraSpr.setFreeFont(&FuenteChica);
     anchoContenido = anchoMixto(barraSpr, nombreContexto);
     if (descContexto.length())
-      anchoContenido += anchoMixto(barraSpr, " - ") + anchoMixto(barraSpr, descContexto);
+      anchoContenido += anchoMixto(barraSpr, SEPARADOR) + anchoMixto(barraSpr, descContexto);
     hayQueDesplazar = anchoContenido > BARRA_ANCHO;
     desplazamiento = 0;
 
