@@ -1,9 +1,9 @@
 # ADR-0002 — Cómo obtiene el ESP32 lo que estás escuchando en Spotify
 
-- **Estado:** `Propuesto` ⚠️ *(pendiente de decidir contigo — ver "Decisión")*
+- **Estado:** `Aceptado` ✅ *(decidido el 2026-08-29)*
 - **Fecha:** 2026-08-29
 - **Reemplaza a:** —
-- **Relacionado con:** RF-01, RF-02, ADR-0003 (letras)
+- **Relacionado con:** RF-01, RF-02, ADR-0003 (letras), supuestos S-04 y S-09
 
 ---
 
@@ -32,12 +32,10 @@ aprende con cada una.
 
 **Lo que asumimos sin verificar:**
 
-- ⚠️ Que el endpoint de "reproduciendo ahora" sigue disponible para apps nuevas
-  en 2026 y bajo qué condiciones. Spotify ha ido restringiendo su API con el
-  tiempo y ha marcado endpoints como obsoletos. **Esto hay que verificarlo en la
-  fase 5 antes de escribir una línea de código.**
-- Que una app en "modo desarrollo" (uso personal, sin revisión de Spotify) basta
-  para el caso de uso.
+- ✅ **Verificado el 2026-08-29** — el endpoint sigue activo y quedó fuera de los
+  recortes de 2024 y 2026. Ver [investigación](../5-investigacion/spotify-api-2026.md).
+- ✅ **Verificado** — el modo desarrollo permite 5 usuarios, de sobra. Exige que el
+  dueño tenga **Spotify Premium**: confirmado, plan Familiar como titular.
 - Que la respuesta JSON de Spotify cabe en memoria del ESP32 si se parsea de
   forma incremental.
 
@@ -111,42 +109,98 @@ mover la lógica al ESP32.
 
 ## Decisión
 
-⚠️ **Pendiente.** Esta decisión te toca a ti porque depende de qué quieres
-priorizar, y las dos respuestas son legítimas.
+**Opción A: el ESP32 habla directo con Spotify.** Sin puente, sin intermediarios.
 
-**Mi recomendación: opción C, empezar por el puente.**
+Yo había recomendado la opción C (empezar por el puente para separar los dos
+problemas difíciles). **Se descartó a favor de la A, y con buen motivo.**
 
-El motivo: en este proyecto hay dos cosas difíciles a la vez — hacer que el ESP32
-hable con internet de forma segura, y hacer que se vea bien en una pantalla
-diminuta. Si las atacas juntas y no funciona, no vas a saber cuál de las dos
-falló. Empezando por el puente resuelves primero la pantalla (que es la parte
-visible y satisfactoria), y después migras la conexión al ESP32 con la pantalla ya
-funcionando como herramienta de diagnóstico.
+El factor que decidió: el
+[requerimiento raíz del proyecto](../4-requerimientos/REQUERIMIENTOS.md#para-qué-lo-quiero)
+es **aprender electrónica e IoT**. Con ese objetivo, la parte que yo proponía
+mover a la Mac —WiFi, TLS, OAuth, parsear JSON con memoria contada— **es
+justamente lo que hay que aprender**. Sacarla del ESP32 habría sacado del proyecto
+lo más valioso que tiene para enseñar.
 
-Y el destino sigue siendo la opción A: el aparato autónomo. Solo que llegando por
-un camino donde cada paso se puede verificar.
+Mi argumento a favor del puente era de eficiencia (llegar antes a ver píxeles).
+Ese argumento pierde fuerza cuando el objetivo no es llegar, sino recorrer.
 
-**Si prefieres ir directo a la opción A, también está bien** — es más lento pero
-aprendes más rápido, valga la contradicción. Dímelo y actualizo este ADR.
+Y hay un segundo motivo, más práctico: el destino siempre fue la opción A. El
+puente habría significado escribir dos veces la capa de red. La ruta directa
+cuesta más al principio y menos en total.
+
+## Cómo se compensa la dificultad
+
+Se elige el camino difícil, pero **no se ataca de golpe**. El orden importa, y
+cada paso se verifica antes de pasar al siguiente:
+
+```mermaid
+graph TD
+    A["1 · Blink + info del chip<br/>✅ hecho"] --> B["2 · Conectar a WiFi<br/>imprimir la IP"]
+    B --> C["3 · HTTPS a un sitio cualquiera<br/>📊 medir RAM libre"]
+    C --> D{"¿Sobra memoria?"}
+    D -->|"Sí"| E["4 · OAuth desde la Mac<br/>obtener refresh_token"]
+    D -->|"No"| X["⚠️ Reabrir este ADR<br/>y considerar el puente"]
+    E --> F["5 · ESP32 renueva su token solo"]
+    F --> G["6 · Leer y parsear la canción"]
+    G --> H["7 · Dibujarla en la GMT130"]
+
+    style A fill:#2d4a2d,color:#fff
+    style D fill:#5a4a2d,color:#fff
+    style X fill:#5a2d2d,color:#fff
+```
+
+**El paso 3 es el punto de control.** Ahí se mide cuánta RAM queda con TLS activo
+(supuesto S-04), y es un *spike*: código desechable cuyo único producto es un
+número anotado en la fase 5.
+
+Si ese número resulta demasiado bajo, no es un fracaso — es la señal de que había
+que reabrir este ADR. Por eso está dibujado el camino de salida: **la decisión
+lleva su propia condición de reversa escrita.**
 
 ## Consecuencias
 
-*(Se completa cuando se tome la decisión.)*
+**Lo que esto nos habilita:**
 
-**Lo que hay que vigilar en cualquiera de los casos:**
+- El aparato es **autónomo de verdad**. Se enchufa donde sea y funciona, sin
+  depender de que la Mac esté prendida.
+- Se aprende lo que se venía a aprender: WiFi, HTTPS, certificados, OAuth y
+  gestión de memoria en un dispositivo con 320 KB.
+- Nada que mantener corriendo en la Mac.
 
-- Que el endpoint de Spotify siga vivo y accesible en modo desarrollo. **Este es
-  el riesgo número uno del proyecto**: si Spotify cierra ese acceso, no hay
-  código que lo arregle. Verificar antes que nada.
-- El límite de peticiones. Consultar cada 1 segundo casi seguro es demasiado;
-  cada 5–10 segundos suele ser razonable.
-- Que el *refresh token* no acabe subido a ningún repositorio público.
+**Lo que esto nos cuesta:**
+
+- Bastante más difícil. El paso 3 puede tumbar el plan.
+- Depurar es incómodo: el único diagnóstico es lo que se imprima por el puerto
+  serie. (Por eso el `platformio.ini` ya trae `esp32_exception_decoder`, que
+  traduce los crashes de direcciones de memoria a nombres de función.)
+- El `refresh_token` vive en el ESP32. Si el aparato se pierde o se presta, hay
+  que revocarlo desde la cuenta de Spotify.
+
+**Lo que hay que vigilar:**
+
+- 📊 **La RAM libre.** Es el número a seguir en todo el proyecto. Por eso el
+  firmware de prueba ya lo imprime desde el primer día.
+- 🔐 **Que el `refresh_token` no acabe en Git.** El `.gitignore` ya bloquea
+  `secrets.h` y `credentials.h` (RNF-05).
+- 📜 **Los certificados raíz caducan.** Es el único riesgo del proyecto donde el
+  aparato funciona meses y **deja de funcionar solo, un día, sin que nadie haya
+  tocado nada**. Cuando llegue el paso 3 hay que decidir cómo manejarlo y
+  anotar la fecha de caducidad en algún lado.
+- ⏱️ **El límite de peticiones.** Consultar cada ~5 s y **respetar siempre el
+  `Retry-After`** de las respuestas 429.
 
 ## Cómo revertir
 
-**Medio.** Cambiar de puente a directo (o al revés) implica reescribir la capa de
-red del firmware, pero **no** toca la capa de pantalla ni la lógica de
-presentación. Si el código se estructura separando "de dónde vienen los datos" de
-"cómo se dibujan", el cambio queda contenido en un solo archivo.
+**Medio.** Migrar a la arquitectura de puente implicaría reescribir la capa de red
+del firmware, pero **no** tocaría la capa de pantalla ni la lógica de
+presentación.
 
-Esa separación es, de hecho, la razón principal por la que la opción C es viable.
+Por eso el código debe estructurarse desde el principio separando **"de dónde
+vienen los datos"** de **"cómo se dibujan"**. Es una regla que ya salió por tres
+motivos distintos —este ADR, el [0003](ADR-0003-fuente-de-las-letras.md) (cambiar
+de fuente de letras) y el [0004](ADR-0004-pantalla-gmt130.md) (cambiar de
+pantalla)—, y cuando tres razones independientes apuntan a la misma estructura,
+esa estructura es la correcta.
+
+Esa separación es también lo que hace barata la salida del paso 3: si la memoria
+no alcanza, se cambia el origen de los datos sin tocar nada más.

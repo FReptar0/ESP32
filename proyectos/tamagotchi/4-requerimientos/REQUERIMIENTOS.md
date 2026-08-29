@@ -90,7 +90,7 @@ que el proyecto pueda terminarse:
 | S-06 | El WiFi de casa es 2.4 GHz | 🔄 En curso — el firmware de prueba escanea las redes | RF-05. ⚠️ **El ESP32 no se conecta a redes de 5 GHz** |
 | S-07 | ~~La GMT130 es 3.3 V y ST7789~~ | ✅ **Resuelto** — confirmado en la placa | — |
 | S-08 | ~~Faltan las resistencias CC en las placas USB-C~~ | ✅ **Descartado** — C-001 enumeró directo en el puerto USB-C. Era el cable |
-| S-09 | **Tienes una cuenta Spotify Premium** | 🔴 **No — bloqueante** | **Todo.** Spotify lo exige para apps en modo desarrollo. No hay rodeo posible |
+| S-09 | ~~Tienes una cuenta Spotify Premium~~ | ✅ **Resuelto** — plan Familiar, como titular | — |
 
 > S-06 merece atención: muchos routers modernos usan el mismo nombre de red para
 > 2.4 GHz y 5 GHz. El ESP32 solo entiende 2.4 GHz, y este es un clásico de
@@ -102,10 +102,11 @@ que el proyecto pueda terminarse:
 |---|---|---|---|
 | ~~La placa no se detecta~~ | — | — | ✅ Resuelto 2026-08-29: eran cables de solo carga |
 | ~~Spotify cierra el endpoint~~ | — | — | ✅ Verificado 2026-08-29: sigue activo y fuera de los recortes |
-| **Sin cuenta Premium, la app no funciona** | ❓ Por confirmar | **Muy alto** | Requisito duro de Spotify. Sin rodeo técnico |
+| ~~Sin cuenta Premium la app no funciona~~ | — | — | ✅ Resuelto: plan Familiar como titular |
 | Superar el límite de peticiones (429) | Media | Bajo | Spotify no publica el número. Consultar cada 5 s y respetar siempre `Retry-After` |
 | El texto se ve nítido pero demasiado chico para leerlo a 60 cm | Media | Medio | 240 px en 1.3" = píxeles diminutos. Se resuelve con fuentes más grandes, sacrificando caracteres. Ver [ADR-0004](../1-decisiones/ADR-0004-pantalla-gmt130.md) |
-| El ESP32 se queda sin memoria con TLS | Media | Alto | Migrar a arquitectura de puente ([ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) opción B) |
+| **El ESP32 se queda sin memoria con TLS** | Media | Alto | 🎯 **Es ahora el riesgo #1.** Se mide en el paso 3 del [ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md). Si falla, se reabre ese ADR y se migra al puente |
+| Los certificados raíz TLS caducan | Baja | Alto | Único riesgo donde el aparato deja de funcionar solo, sin que nadie toque nada. Se decide en el futuro ADR-0009 |
 | El alcance crece y el proyecto no termina | **Alta** | Medio | La lista de "fuera de alcance" de arriba. Revisarla cada vez que aparezca una idea nueva |
 
 ---
