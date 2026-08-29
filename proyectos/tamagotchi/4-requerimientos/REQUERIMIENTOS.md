@@ -82,14 +82,14 @@ que el proyecto pueda terminarse:
 
 | # | Supuesto | ¿Verificado? | Si es falso, ¿qué se rompe? |
 |---|---|---|---|
-| S-01 | Al menos una de las 3 placas ESP32 funciona y se puede programar | ❌ **No** — ninguna probada aún | **Todo.** Es el bloqueante #1 |
+| S-01 | ~~Al menos una placa ESP32 funciona~~ | ✅ **Resuelto** — C-001 identificada y respondiendo | — |
 | S-02 | La API de Spotify permite leer "reproduciendo ahora" con una app personal en 2026 | ❌ No | RF-01 a RF-04. No hay código que lo arregle |
 | S-03 | ~~Hay una pantalla disponible~~ | ✅ **Resuelto** — 4× GMT130 240×240 en inventario | — |
 | S-04 | El ESP32 tiene RAM suficiente para HTTPS + JSON a la vez | ❌ No | Obligaría a la arquitectura de puente del [ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) |
 | S-05 | Existe una fuente gratuita de letras sincronizadas para tu música | ❌ No | Solo RF-04. El resto sobrevive |
-| S-06 | El WiFi de casa es 2.4 GHz | ❌ No | RF-05. ⚠️ **El ESP32 no se conecta a redes de 5 GHz** |
-| S-07 | La GMT130 es 3.3 V y usa controlador ST7789 | ❌ No — falta mirar la plaquita | Elección de librería. ⚠️ Si fuera 5 V, riesgo de dañar el ESP32 |
-| S-08 | Las placas USB-C no traen las resistencias CC de 5.1 kΩ | ❌ No | Es la hipótesis principal del bloqueante. Se prueba con la C-003 (mini-USB) |
+| S-06 | El WiFi de casa es 2.4 GHz | 🔄 En curso — el firmware de prueba escanea las redes | RF-05. ⚠️ **El ESP32 no se conecta a redes de 5 GHz** |
+| S-07 | ~~La GMT130 es 3.3 V y ST7789~~ | ✅ **Resuelto** — confirmado en la placa | — |
+| S-08 | ~~Faltan las resistencias CC en las placas USB-C~~ | ✅ **Descartado** — C-001 enumeró directo en el puerto USB-C. Era el cable |
 
 > S-06 merece atención: muchos routers modernos usan el mismo nombre de red para
 > 2.4 GHz y 5 GHz. El ESP32 solo entiende 2.4 GHz, y este es un clásico de
@@ -99,9 +99,7 @@ que el proyecto pueda terminarse:
 
 | Riesgo | Probabilidad | Impacto | Plan si ocurre |
 |---|---|---|---|
-| Las placas USB-C no enumeran por falta de resistencias CC | **Alta** | Bajo | Usar cable USB-A → USB-C, o la C-003 (mini-USB). Se resuelve con un cable |
-| El cable no es de datos | Media | Bajo | Probar otro cable. Hay 3 placas, así que descartar es fácil |
-| Las 3 placas están dañadas | Muy baja | Alto | Improbable con 3 unidades. Reponer (~$100–200 MXN c/u) |
+| ~~La placa no se detecta~~ | — | — | ✅ Resuelto 2026-08-29: eran cables de solo carga |
 | Spotify restringe o cierra el endpoint | Media | **Muy alto** | Verificar **antes** de programar. Sin plan B real: sería otro proyecto |
 | El texto se ve nítido pero demasiado chico para leerlo a 60 cm | Media | Medio | 240 px en 1.3" = píxeles diminutos. Se resuelve con fuentes más grandes, sacrificando caracteres. Ver [ADR-0004](../1-decisiones/ADR-0004-pantalla-gmt130.md) |
 | El ESP32 se queda sin memoria con TLS | Media | Alto | Migrar a arquitectura de puente ([ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) opción B) |
@@ -114,4 +112,5 @@ que el proyecto pueda terminarse:
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
+| 2026-08-29 | S-01, S-07 y S-08 resueltos; S-06 en curso; riesgos de hardware cerrados | La placa fue identificada (ESP32-D0WD-V3) y la GMT130 confirmada. El bloqueante era cables USB-C de solo carga |
 | 2026-08-29 | S-03 resuelto; RF-04 sube de `Podría` a `Debería`; riesgos reordenados | Apareció el inventario real: 4× TFT 240×240 a color en vez de la OLED 128×64 supuesta. Con esa resolución las letras dejan de ser una apuesta ([ADR-0004](../1-decisiones/ADR-0004-pantalla-gmt130.md)) |

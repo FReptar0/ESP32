@@ -7,8 +7,8 @@ qué esperaba. La ficha es el filtro que atrapa eso.
 
 | Componente | ID | Cant. | Ficha | Estado |
 |---|---|---|---|---|
-| ESP32-S NodeMCU (USB-C) | C-001, C-002 | 2 | [ficha](esp32s-nodemcu.md) | 🟡 No detectadas — ver hipótesis USB-C |
-| ESP32 DEVKIT v1 (mini-USB) | C-003 | 1 | [ficha](esp32s-nodemcu.md) | 🎯 **Sin probar — es la prueba decisiva** |
+| ESP32-S NodeMCU (USB-C) | C-001, C-002 | 2 | [ficha](esp32-d0wd-v3.md) | 🟡 No detectadas — ver hipótesis USB-C |
+| ESP32 DEVKIT v1 (mini-USB) | C-003 | 1 | [ficha](esp32-d0wd-v3.md) | 🎯 **Sin probar — es la prueba decisiva** |
 | TFT IPS 1.3" GMT130 240×240 | C-004 | 4 | [ficha](gmt130-tft-ips-240x240.md) | 🟡 Por confirmar voltaje y pines |
 
 ## ⚠️ Lo que hay que verificar antes de conectar nada

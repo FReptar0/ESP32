@@ -45,6 +45,33 @@ por mi cuenta.
 
 # Historial
 
+## 2026-08-29 — `NOTA` — ✅ C-001 identificada y funcionando
+
+- **Qué pasó:** La placa fue detectada, identificada e interrogada con `esptool`.
+  **La causa del bloqueo eran cables USB-C de solo carga**, no la placa.
+- **Estado:** `Disponible` → `En uso`
+- **Proyecto:** tamagotchi
+- **Nota:** Identidad confirmada: **ESP32-D0WD-V3 rev v3.1**, 2 núcleos @ 240 MHz,
+  4 MB de flash, Wi-Fi + BT, chip USB-Serie **CP2102** (Silicon Labs), puerto
+  `/dev/cu.usbserial-0001`. **MAC `84:1F:E8:2C:3E:C4`** — sirve para distinguirla
+  de la C-002, que es idéntica por fuera.
+  El `-S` de "ESP32-S" era marca comercial del vendedor: es el ESP32 clásico, no
+  un S2 ni un S3. Auto-reset funcionando, así que no hace falta apretar BOOT al
+  programar.
+
+## 2026-08-29 — `NOTA` — ⚠️ Cables USB-C de solo carga (causa raíz del bloqueo)
+
+- **Qué pasó:** Varios de los cables C-a-C disponibles **llevan corriente pero no
+  datos**. Con ellos el LED de la placa enciende pero la Mac no ve nada.
+- **Estado:** —
+- **Proyecto:** tamagotchi
+- **Nota:** Se registra aquí porque **el cable es material de taller**, y este es
+  exactamente el tipo de cosa que uno vuelve a sufrir en un año.
+  🔖 **Regla:** ante un "no me detecta la placa", conectar ese cable a un celular.
+  Si la compu no ve el celular, el cable no pasa datos y no hay nada más que
+  investigar. Cuesta 20 segundos.
+  💡 Vale la pena marcar físicamente el cable que sí funciona.
+
 ## 2026-08-29 — `NOTA` — GMT130 (C-004): especificaciones confirmadas
 
 - **Qué pasó:** Verificación física del módulo. Confirmado: **`Driver IC: ST7789`,

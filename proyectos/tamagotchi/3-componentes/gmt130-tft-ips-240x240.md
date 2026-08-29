@@ -105,7 +105,7 @@ NodeMCU-32S, así que la tabla sirve para cualquiera de tus 3 placas.
 ## Cómo probarla aislada
 
 Solo cuando el ESP32 ya funcione por su cuenta (ver
-[ficha del ESP32](esp32s-nodemcu.md)):
+[ficha del ESP32](esp32-d0wd-v3.md)):
 
 1. Con el USB **desconectado**, cablear los 7 pines según la tabla de arriba.
 2. Revisar dos veces `VCC` y `GND`. Es el par que quema cosas.

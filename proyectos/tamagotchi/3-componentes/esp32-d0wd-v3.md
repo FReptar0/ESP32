@@ -3,8 +3,7 @@
 - **ID en inventario:** C-001
 - **Categoría:** Microcontrolador
 - **Fecha de la ficha:** 2026-08-29
-- **Estado de la ficha:** ⚠️ **Incompleta** — la placa aún no responde, faltan los
-  datos que solo se pueden confirmar con ella conectada
+- **Estado de la ficha:** ✅ **Confirmada contra la placa física** (2026-08-29)
 - **Datasheet:** [ESP32-WROOM-32 (Espressif)](https://www.espressif.com/sites/default/files/documentation/esp32-wroom-32_datasheet_en.pdf)
 
 ---
@@ -17,22 +16,43 @@ por USB y tiene pines para conectarle cosas (pantallas, sensores, botones).
 Para el Tamagotchi es el cerebro: se conecta a internet, le pregunta a Spotify
 qué estás oyendo, y dibuja el resultado en la pantalla.
 
-## Sobre el nombre "ESP32-S NodeMCU"
+## ✅ Identidad confirmada
 
-Vale la pena aclararlo porque genera confusión y afecta lo que hay que comprar:
+Interrogada directamente con `esptool` el 2026-08-29:
 
-- **ESP32** — la familia de chips de Espressif.
-- **ESP32-WROOM-32** — el módulo concreto que traen la mayoría de las placas
-  genéricas: el chip + memoria + antena, todo en una latita metálica.
-- **NodeMCU** — el formato de la placa (el rectángulo con pines a los lados y un
-  puerto USB). Originalmente era para el ESP8266 y el nombre se heredó.
-- **"ESP32-S"** — ⚠️ **ojo aquí.** En las placas genéricas suele ser solo una
-  marca comercial del vendedor, sinónimo de "ESP32 en formato NodeMCU". **No es
-  lo mismo que el ESP32-S2 ni el ESP32-S3**, que son chips distintos y más nuevos.
+| Dato | Valor |
+|---|---|
+| Chip | **ESP32-D0WD-V3**, revisión v3.1 |
+| Núcleos | 2, a 240 MHz |
+| Radio | Wi-Fi 2.4 GHz + Bluetooth |
+| Memoria flash | **4 MB** |
+| Cristal | 40 MHz |
+| **Dirección MAC** | `84:1F:E8:2C:3E:C4` |
+| Chip USB-Serie | **CP2102** (Silicon Labs) |
+| Puerto en macOS | `/dev/cu.usbserial-0001` |
+| Perfil de PlatformIO | `board = esp32dev` |
 
-Esto importa porque al configurar PlatformIO hay que decirle exactamente qué
-placa es. Elegir mal implica que el código compila pero no funciona, o que los
-pines no corresponden. **Se confirma cuando la placa responda.**
+> **La MAC es el número de serie de la placa.** Es única e irrepetible, así que
+> sirve para distinguir tus placas idénticas entre sí. Cuando identifiquemos las
+> otras dos, se anota aquí la de cada una.
+
+### Sobre el nombre "ESP32-S NodeMCU"
+
+Confirmado lo que se sospechaba: el **"-S" era marca comercial del vendedor**, no
+un chip distinto. El chip real es un **ESP32-D0WD-V3**, o sea el ESP32 clásico —
+**no** es un ESP32-S2 ni un ESP32-S3, que son familias diferentes.
+
+Importa porque es lo que determina el `board = esp32dev` del `platformio.ini`.
+
+### Sobre el CP2102
+
+Es el chip que traduce entre el USB de la Mac y el puerto serie del ESP32. Es de
+Silicon Labs, y **macOS lo reconoce sin instalar ningún driver**.
+
+Un detalle práctico confirmado: `esptool` terminó con `Hard resetting via RTS
+pin`, lo que significa que **el auto-reset funciona**. Traducción: al cargar
+código, la placa entra sola en modo programación. **No hay que apretar el botón
+BOOT** — que es una molestia clásica en placas donde esto no funciona.
 
 ## Alimentación
 
@@ -112,15 +132,42 @@ que la cadena de compilar → cargar funciona completa.
 
 Solo después de eso tiene sentido conectar algo.
 
-## Estado actual: ❌ no detectado
+## ✅ Estado actual: funcionando
 
-**2026-08-29** — La Mac no ve la placa. Diagnóstico completo en
-[`../BITACORA.md`](../BITACORA.md) y en
-[`inventario/LOG.md`](../../../inventario/LOG.md).
+**2026-08-29** — Detectada, identificada y respondiendo. La cadena
+`editar → compilar → cargar → ejecutar` quedó verificada.
 
-Resumen: no aparece ningún chip USB-Serie en el árbol USB del sistema, y no existe
-ningún `/dev/cu.usbserial*`. Todo el hardware USB visible pertenece al dock
-DisplayLink.
+### La causa del bloqueo: cables USB-C de solo carga
+
+Costó cuatro rondas de diagnóstico. Vale la pena dejar por qué, porque es la
+trampa más común y la vas a volver a encontrar.
+
+**Lo que pasaba:** los cables C-a-C que se probaron primero **llevan corriente
+pero no datos**. Por fuera son idénticos a uno normal. El LED de la placa
+encendía —así que "obviamente estaba conectada"— pero la Mac no veía absolutamente
+nada.
+
+**La pista que lo resolvió:** el LED encendido + cero dispositivos en el árbol
+USB. Esa combinación solo puede significar una cosa: **la corriente llega y los
+datos no.** Si hubiera sido falta de driver, el aparato igual habría aparecido
+como "dispositivo no reconocido". No apareció nada en absoluto.
+
+**Cómo se ve el mismo síntoma con causas distintas:**
+
+| Qué observas | Qué significa |
+|---|---|
+| LED encendido + nada en el árbol USB | 🎯 **Cable de solo carga** ← era esto |
+| Ni LED ni nada | No llega corriente: cable roto, puerto muerto o placa dañada |
+| Aparece en el árbol pero sin puerto `/dev/cu.*` | Falta el driver (raro en macOS moderno) |
+| Aparece y hay puerto, pero `esptool` no conecta | Problema de auto-reset: hay que apretar BOOT |
+
+**Lección para el futuro:** ante cualquier "no me detecta la placa", el primer
+paso es probar ese mismo cable con un celular. Si la compu no ve el celular, el
+cable no pasa datos, y no hay nada más que investigar.
+
+> 💡 Se descartó también la hipótesis de las resistencias CC (que muchas placas
+> ESP32 con USB-C omiten): esta placa enumeró conectada **directo al puerto
+> USB-C** de la Mac, lo que demuestra que sí negocia bien. Era el cable.
 
 > ### ⚠️ Las resistencias que le faltan a muchas placas ESP32 con USB-C
 >

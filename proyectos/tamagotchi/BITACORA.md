@@ -6,7 +6,7 @@ fallaron, las horas perdidas, las sospechas sin confirmar. Las *decisiones* van 
 
 ---
 
-## 2026-08-29 — Sesión 1: arranque del taller y primer diagnóstico
+## 2026-08-29 — Sesión 1: arranque del taller, y la caza del cable
 
 ### Qué se hizo
 
@@ -16,7 +16,7 @@ fallaron, las horas perdidas, las sospechas sin confirmar. Las *decisiones* van 
 - Se mapeó la arquitectura end-to-end.
 - Se intentó detectar el ESP32 desde la Mac.
 
-### ❌ El ESP32 no fue detectado
+### ❌ El ESP32 no fue detectado *(al principio)*
 
 Esta fue la sorpresa de la sesión. Dejo el diagnóstico completo porque, si el
 problema resulta ser otro, este registro es lo que va a permitir descartar
@@ -84,7 +84,7 @@ no hubiera nada conectado. Y desde el punto de vista de la Mac, literalmente no
 hay nada conectado. Tu Mac es Apple Silicon (puertos USB-C), así que lo natural
 es haber usado un cable C-a-C.
 
-Explicación completa en la [ficha del ESP32](3-componentes/esp32s-nodemcu.md).
+Explicación completa en la [ficha del ESP32](3-componentes/esp32-d0wd-v3.md).
 
 ### Hipótesis, reordenadas
 
@@ -98,22 +98,64 @@ Explicación completa en la [ficha del ESP32](3-componentes/esp32s-nodemcu.md).
 5. **La placa está dañada.** Lo menos probable. Y ahora hay forma de descartarlo
    sin dudas: si C-002 o C-003 sí aparecen con el mismo cable, C-001 está mal.
 
+### ✅ RESUELTO — eran cables USB-C de solo carga
+
+Cuatro rondas de diagnóstico para llegar aquí. Vale la pena el registro completo,
+porque el razonamiento sirve para la próxima vez.
+
+**Cómo se fue estrechando el cerco:**
+
+| Ronda | Qué se probó | Resultado | Qué descartó |
+|---|---|---|---|
+| 1 | Placa USB-C por el hub | Nada en el árbol USB | Descartó driver: sin driver igual aparecería como "no reconocido" |
+| 2 | C-003 (mini-USB) por el hub | **Ni LED** | Descartó la hipótesis de las resistencias CC — mini-USB no puede tenerla |
+| 3 | Placa USB-C directo a la Mac | **LED sí, datos no** | 🎯 La combinación decisiva |
+| 4 | Rotar cables C-a-C | Uno funcionó | Confirmado |
+
+**La pista que lo resolvió fue la ronda 3.** LED encendido + cero dispositivos en
+el árbol USB solo puede significar una cosa: **la corriente pasa y los datos no.**
+Eso es, por definición, un cable de solo carga. Por fuera son idénticos a uno
+normal; por dentro les faltan los hilos de datos.
+
+Y de paso quedó descartada mi hipótesis de las resistencias CC: la placa **sí**
+enumeró conectada directo al puerto USB-C de la Mac, así que negocia bien. Era
+100% el cable.
+
+**Identificación de la placa** (`esptool`):
+
+```
+Chip:      ESP32-D0WD-V3 (revisión v3.1)
+Núcleos:   2 @ 240 MHz     Flash: 4 MB
+Radio:     Wi-Fi 2.4 GHz + Bluetooth
+MAC:       84:1F:E8:2C:3E:C4
+USB-Serie: CP2102 (Silicon Labs)
+Puerto:    /dev/cu.usbserial-0001
+```
+
+Confirmado además que **el auto-reset funciona** (`Hard resetting via RTS pin`):
+no habrá que apretar el botón BOOT para programarla. También quedó claro que el
+`-S` de "ESP32-S" era marca del vendedor: es el ESP32 clásico, no un S2 ni un S3.
+
+**La lección, para la próxima:** ante cualquier "no me detecta la placa", el
+primer paso es conectar ese mismo cable a un celular. Si la compu no ve el
+celular, el cable no pasa datos y no hay nada más que investigar. Cuesta 20
+segundos y habría ahorrado las cuatro rondas.
+
+### Lo que se avanzó después
+
+- `platformio.ini` escrito con la placa ya confirmada (`board = esp32dev`).
+- Primer firmware: parpadeo del LED + info del chip + **escaneo de redes WiFi**
+  (que de paso verifica el supuesto S-06, si tu red tiene banda de 2.4 GHz).
+- Fase 6 desbloqueada: plano físico completo en
+  [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md).
+
 ### 🔜 En qué me quedé — siguiente sesión
 
-**Prueba decisiva:** conectar la **C-003 (DEVKIT v1, mini-USB)**. Como su
-conector no es USB-C, no puede tener el problema de las resistencias CC.
-
-- Si **C-003 sí aparece** → hipótesis 1 confirmada. Se resuelve con un cable
-  USB-A → USB-C, y además ya tenemos una placa con la que empezar hoy mismo.
-- Si **C-003 tampoco aparece** → el problema no está en las placas. Es el cable
-  (hipótesis 2) o el dock (hipótesis 3).
-
-En cualquiera de los dos casos salimos del bloqueo sabiendo más. Por eso esta
-prueba va primero: es la que más información da por intento.
-
-**En paralelo, sin hardware:** verificar el supuesto S-02 (que la API de Spotify
-siga permitiendo leer "reproduciendo ahora" con una app personal). Es el riesgo
-más grande del proyecto y no depende de la placa.
+1. Ver el resultado del escaneo WiFi → resuelve el supuesto S-06.
+2. Armar el cableado de la pantalla siguiendo el plano físico.
+3. **Sin hardware, en paralelo:** verificar el supuesto S-02 (que la API de
+   Spotify siga dando "reproduciendo ahora"). Sigue siendo el riesgo #1 y no
+   depende de la placa.
 
 ### Material declarado
 

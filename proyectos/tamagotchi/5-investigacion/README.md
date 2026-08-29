@@ -52,17 +52,30 @@ Prueba barata que puedes hacer tú mismo, sin programar nada: buscar en LRCLIB, 
 mano desde el navegador, **5 canciones que de verdad escuches**. Si tres no
 aparecen, hay que replantear el RF-04 antes de invertir tiempo en él.
 
-### 4. ¿Qué modelo exacto de ESP32 es y qué pines evitar?
-
-Requiere la placa. Ver [ficha del componente](../3-componentes/esp32s-nodemcu.md).
-
-Algunos pines del ESP32 tienen que estar en cierto nivel al arrancar o la placa
-no enciende; otros son solo de entrada. Saber cuáles evitar antes de cablear
-ahorra horas de perseguir un fantasma.
-
 ---
 
 ## ✅ Hallazgos
+
+### 2026-08-29 — La placa es un ESP32-D0WD-V3 con USB-Serie CP2102
+
+**Qué se averiguó:** `ESP32-D0WD-V3` rev v3.1, 2 núcleos @ 240 MHz, 4 MB de
+flash, Wi-Fi + BT. Chip USB-Serie **CP2102** (Silicon Labs), reconocido por macOS
+sin instalar drivers. MAC `84:1F:E8:2C:3E:C4`.
+**Fuente:** prueba propia — `esptool chip-id` y `flash-id`.
+**Por qué importa:** fija el `board = esp32dev` del `platformio.ini`. Confirma
+también que el "-S" del nombre comercial no era un ESP32-S2 ni S3.
+**Confianza:** máxima — se lo preguntamos al chip directamente.
+**Consecuencia:** desbloqueó la fase 2 (entorno) y la fase 6 (plano físico).
+
+### 2026-08-29 — Los cables USB-C de solo carga son indistinguibles a simple vista
+
+**Qué se averiguó:** varios cables C-a-C llevan corriente pero **no datos**. El
+síntoma es LED encendido + cero dispositivos en el árbol USB.
+**Fuente:** prueba propia — 4 rondas de diagnóstico.
+**Por qué importa:** costó todo el arranque del proyecto. Y se va a repetir.
+**Confianza:** máxima.
+**Consecuencia:** 🔖 **Regla del taller:** ante un "no me detecta la placa",
+probar ese cable con un celular antes que nada. 20 segundos contra horas.
 
 ### 2026-08-29 — La API pública de Spotify no da letras
 

@@ -34,13 +34,12 @@
 
 | ID | Componente | Categoría | Estado | Cant. | Lógica | Proyecto | Specs clave | Notas |
 |---|---|---|---|---|---|---|---|---|
-| C-001 | ESP32-S NodeMCU (genérico) — **USB-C** | Microcontrolador | Disponible | 1 | 3.3 V | tamagotchi | ESP32-WROOM-32, WiFi 2.4 GHz + BT | ⚠️ **No detectado** por la Mac. Ver LOG 2026-08-29 |
-| C-002 | ESP32-S NodeMCU (genérico) — **USB-C** | Microcontrolador | Disponible | 1 | 3.3 V | — | Idéntica a C-001 | Refacción / banco de pruebas |
-| C-003 | ESP32 **DEVKIT v1** — **mini-USB** | Microcontrolador | Disponible | 1 | 3.3 V | — | ESP32-WROOM-32, 30 pines, WiFi 2.4 GHz + BT | 🎯 **La placa de diagnóstico.** Al ser mini-USB esquiva el problema de USB-C |
-| C-004 | TFT IPS 1.3" **GMT130-v1.0** | Pantalla | Disponible | **4** | 3.3 V | tamagotchi | **240×240 px, color, IPS**, controlador ST7789 (por confirmar), SPI | Excelente para este proyecto. Ficha pendiente de confirmar pines |
+| C-001 | ESP32 genérico — **USB-C** | Microcontrolador | **En uso** | 1 | 3.3 V | tamagotchi | **ESP32-D0WD-V3 rev3.1**, 2×240 MHz, 4 MB flash, WiFi+BT, USB-Serie **CP2102** | ✅ Funcionando. MAC `84:1F:E8:2C:3E:C4` · `/dev/cu.usbserial-0001` |
+| C-002 | ESP32 genérico — **USB-C** | Microcontrolador | Disponible | 1 | 3.3 V | — | Idéntica a C-001 (sin confirmar) | Refacción. Su MAC la distinguirá de C-001 |
+| C-003 | ESP32 **DEVKIT v1** — micro/mini-USB | Microcontrolador | Disponible | 1 | 3.3 V | — | ESP32-WROOM-32, WiFi 2.4 GHz + BT | ⚠️ Sin LED al conectarla. **Sin probar con un cable bueno** — no asumir que está dañada |
+| C-004 | TFT IPS 1.3" **GMT130-v1.0** | Pantalla | Disponible | **4** | 3.3 V | tamagotchi | **240×240 px, color, IPS**, ✅ **ST7789**, SPI, 7 pines sin `CS` | ✅ Especificaciones confirmadas |
 
-**Resumen:** 3 microcontroladores, 4 pantallas. Material más que suficiente para el
-Tamagotchi — el bloqueante es de conexión, no de inventario.
+**Resumen:** 3 microcontroladores, 4 pantallas. ✅ Sin bloqueantes de material.
 
 ---
 
@@ -48,7 +47,7 @@ Tamagotchi — el bloqueante es de conexión, no de inventario.
 
 | ID | Componente | ¿Para qué proyecto? | Prioridad | Notas |
 |---|---|---|---|---|
-| — | Cable **USB-A → USB-C** de datos | tamagotchi | 🔴 **Alta** | Ver LOG 2026-08-29. Puede ser *la* solución al bloqueante. Casi seguro ya tienes uno de algún celular |
+| — | ~~Cable USB-A → USB-C~~ | tamagotchi | ✅ Resuelto | Ya se encontró un cable C-a-C que sí pasa datos. **Márcalo físicamente** |
 | — | Protoboard + jumpers hembra-hembra | tamagotchi | 🟡 Media | Para conectar la pantalla sin soldar. Confirmar si ya tienes |
 
 ---

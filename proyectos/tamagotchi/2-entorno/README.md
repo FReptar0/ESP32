@@ -56,12 +56,13 @@ Es exactamente el requerimiento
 | Entorno virtual creado (`.venv/`) | ✅ |
 | PlatformIO instalado en el entorno | ✅ |
 | `esptool` instalado (diagnóstico de la placa) | ✅ |
-| `platformio.ini` escrito | 🔴 Falta confirmar el modelo exacto de la placa |
-| Primera compilación | 🔴 Bloqueada — el ESP32 no responde |
+| `platformio.ini` escrito | ✅ `board = esp32dev` (ESP32-D0WD-V3 confirmado) |
+| Placa detectada | ✅ `/dev/cu.usbserial-0001` (CP2102) |
+| Primera compilación | 🔄 En curso |
 
-> El `platformio.ini` no se escribe todavía **a propósito**: hay que decirle qué
-> placa es (`board = ...`), y el modelo exacto solo se puede confirmar con la
-> placa conectada. Ver [ficha del ESP32](../3-componentes/esp32s-nodemcu.md).
+> El `platformio.ini` se escribió **después** de confirmar la placa con `esptool`,
+> no antes. Ese orden importa: poner un `board` equivocado compila igual pero
+> luego falla de formas confusas. Ver [ficha del ESP32](../3-componentes/esp32-d0wd-v3.md).
 
 ---
 
@@ -99,7 +100,7 @@ Para salir del monitor serie: `Ctrl+C`.
 ### Diagnóstico de la placa
 
 ```bash
-esptool --port /dev/cu.usbserial-XXXX chip-id
+esptool --port /dev/cu.usbserial-0001 chip-id
 ```
 
 > Ojo: en versiones viejas el comando era `esptool.py`. Desde la v5 (la que
@@ -116,10 +117,10 @@ independientemente de si tu código funciona o no. Es la prueba definitiva.
 **2026-08-29** — Entorno creado con Python 3.13.2 en macOS 26.5.2 (Apple Silicon).
 Versiones instaladas: **PlatformIO Core 6.1.19**, **esptool 5.3.1**.
 
-Verificación tras instalar: `pio device list` solo muestra los 3 puertos internos
-de macOS (Bluetooth, debug-console, wlan-debug). **Ningún ESP32.** Esto confirma
-por segunda vía, con la herramienta oficial, el diagnóstico de la
-[bitácora](../BITACORA.md).
+Verificación tras instalar: en el primer intento `pio device list` solo mostraba
+los 3 puertos internos de macOS. Tras cambiar el cable USB apareció
+`/dev/cu.usbserial-0001`. La causa del bloqueo está documentada en la
+[bitácora](../BITACORA.md): eran cables USB-C de solo carga.
 
 Se instalaron dos paquetes:
 
