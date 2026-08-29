@@ -34,6 +34,21 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — El scope mínimo para este proyecto es uno solo
+
+**Qué se averiguó:** `/me/player/currently-playing` requiere únicamente
+**`user-read-currently-playing`**. No hace falta `user-read-playback-state` ni,
+mucho menos, `user-modify-playback-state`.
+**Fuente:** documentación oficial del endpoint.
+**Por qué importa:** `user-modify-playback-state` daría permiso para **controlar**
+la reproducción (play, pausa, saltar). Está fuera del alcance del proyecto por
+decisión propia, y además **este token va a vivir dentro del ESP32**: si el
+aparato se pierde o se presta, ese permiso se va con él. Pidiendo lo mínimo, en
+el peor caso alguien vería qué música escuchas, no manipularía la cuenta.
+**Confianza:** máxima.
+**Consecuencia:** `tools/get-refresh-token.py` pide solo ese scope.
+
+
 ### 2026-08-29 — ✅ La memoria alcanza de sobra (resuelve S-04)
 
 **Qué se averiguó:** con TLS activo contra `accounts.spotify.com`, el mínimo
