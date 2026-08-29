@@ -1,0 +1,18 @@
+# Entornos virtuales de Python (se regeneran con nuevo-proyecto.sh)
+**/.venv/
+__pycache__/
+
+# Compilación de PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# 🔒 SECRETOS — nunca deben subirse
+**/secrets.h
+**/credentials.h
+**/config_local.h
+.env
+*.token
+
+# macOS
+.DS_Store
