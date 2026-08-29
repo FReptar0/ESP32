@@ -34,6 +34,45 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — La fuente legible a 60 cm es la 4, y eso recorta el texto disponible
+
+**Qué se averiguó:** de las tres fuentes probadas en la GMT130, **la fuente 4
+(26 px de alto) es la que se lee cómodo a distancia de escritorio**. La 2 se ve
+nítida pero cuesta leerla; la 6 se lee genial pero ocupa demasiado.
+**Fuente:** prueba propia — mirando la pantalla a ~60 cm.
+**Confianza:** máxima. Es una medición perceptual, y el criterio del RNF-01 es
+justamente perceptual.
+
+**Por qué importa — y aquí está la sorpresa:**
+
+Las estimaciones anteriores usaban una fuente de 8×16 px y daban **~30 caracteres
+× 15 líneas**. Con la fuente 4 (26 px de alto, ancho variable) la realidad es
+más bien:
+
+| | Estimado antes (fuente 8×16) | Real con fuente 4 |
+|---|---|---|
+| Caracteres por línea | ~30 | **~17** |
+| Líneas | ~15 | **~9** |
+
+O sea: **casi la mitad** de lo que se había calculado.
+
+Es exactamente el riesgo que estaba anotado en el
+[ADR-0004](../1-decisiones/ADR-0004-pantalla-gmt130.md): *"240 píxeles en 1.3
+pulgadas son píxeles diminutos; el texto puede verse nítido y aun así no
+leerse"*. Lo que cabe **técnicamente** y lo que se **lee** son cosas distintas, y
+solo se distinguen mirando.
+
+**Consecuencia:**
+
+- ✅ **RNF-01 resuelto** — fuente 4 para el texto principal.
+- ⚠️ **El RF-04 (letras) vuelve a estar apretado.** Con ~17 caracteres por línea,
+  un verso normal necesita dos o tres renglones. Sigue siendo viable —una OLED de
+  0.96" daba 20 caracteres × 4 líneas—, pero hay menos margen del que parecía.
+- 📌 **Pendiente medirlo de verdad:** los números de arriba son estimaciones. El
+  ESP32 puede decirnos el ancho exacto con `tft.textWidth(texto, 4)`. Conviene
+  medirlo con títulos de canciones reales antes de diseñar la pantalla.
+
+
 ### 2026-08-29 — 🎉 El ESP32 lee lo que suena en Spotify, con certificado verificado
 
 **Qué se logró:** la placa renueva su propio `access_token`, consulta

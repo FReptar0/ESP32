@@ -46,7 +46,7 @@ eso es esperado, no un problema.
 
 | ID | Requerimiento | Valor objetivo | Cómo se mide |
 |---|---|---|---|
-| RNF-01 | Legible a distancia de escritorio | Se lee cómodo a ~60 cm | Prueba directa, sin acercarse |
+| RNF-01 | ~~Legible a distancia de escritorio~~ | ✅ **Resuelto** — fuente 4 (26 px) se lee cómodo a 60 cm | Probado mirando la pantalla |
 | RNF-02 | No molesta de noche | No ilumina la habitación a oscuras | Prueba directa con la luz apagada. Con la GMT130 se resuelve por PWM en el pin `BLK` |
 | RNF-03 | Cabe en un escritorio | < 10 × 10 × 10 cm aprox. | Medir |
 | RNF-04 | El proyecto se puede recompilar dentro de un año y funciona igual | Versiones fijadas en `platformio.ini` | Ver [ADR-0001](../1-decisiones/ADR-0001-plataforma-de-desarrollo.md) |
@@ -125,6 +125,7 @@ que el proyecto pueda terminarse:
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
+| 2026-08-29 | RNF-01 resuelto (fuente 4). El texto disponible baja a ~17 car. × 9 líneas | Medición perceptual en la pantalla real. Casi la mitad de lo estimado con fuente 8×16: aprieta el RF-04 |
 | 2026-08-29 | RF-01/02/03/05/06 con datos funcionando; riesgo de certificados mitigado | El ESP32 lee Spotify con certificado verificado. ADR-0009 cerrado |
 | 2026-08-29 | Controlar Spotify pasa de fuera de alcance a RF-08/09/10 | Decisión del usuario. Se piden los permisos desde ya para no repetir OAuth ([ADR-0010](../1-decisiones/ADR-0010-permisos-de-spotify.md)) |
 | 2026-08-29 | S-04 resuelto — el punto de control del ADR-0002 pasó con 199.4 KB de margen | Spike de memoria con TLS contra el servidor real de Spotify. La arquitectura directa se confirma |

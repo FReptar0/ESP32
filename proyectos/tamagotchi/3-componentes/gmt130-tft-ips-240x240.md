@@ -133,9 +133,13 @@ la pantalla se queda blanca, el problema está en las líneas de datos (`SDA`,
 
 ## Cuánto texto cabe realmente
 
-Estimación con una fuente de 8×16 píxeles:
+✅ **Medido el 2026-08-29 con la pantalla enfrente**, no calculado.
 
-- **~30 caracteres por línea** × **~15 líneas**
+| Fuente | Alto | Aprox. por pantalla | Veredicto a 60 cm |
+|---|---|---|---|
+| Fuente 2 | 16 px | ~30 car. × 15 líneas | Nítida, pero cuesta leerla |
+| **Fuente 4** | **26 px** | **~17 car. × 9 líneas** | ✅ **La elegida** — cómoda |
+| Fuente 6 | 48 px | ~10 car. × 5 líneas | Se lee genial, ocupa demasiado |
 
 Compárala con la OLED de 0.96" que se iba a comprar: ~20 caracteres × 4 líneas.
 
@@ -143,11 +147,13 @@ Ahí está la razón de fondo del [ADR-0004](../1-decisiones/ADR-0004-pantalla-g
 esta diferencia es lo que hace que mostrar letras (RF-04) pase de "prácticamente
 inviable" a "hay que probarlo".
 
-⚠️ **Pero ojo con el RNF-01** (que se lea a 60 cm): 240 píxeles en 1.3 pulgadas
-significa píxeles diminutos. Una fuente de 8×16 se va a ver **nítida pero
-probablemente demasiado chica para leerla cómodo**. Muy probablemente haya que
-usar fuentes más grandes y aceptar menos caracteres. Eso se decide midiendo, con
-la pantalla enfrente — no en el papel.
+**La advertencia se cumplió.** Esta ficha decía que 240 px en 1.3 pulgadas son
+píxeles diminutos y que el texto podría verse nítido pero no leerse. Así fue: la
+fuente chica se ve perfectamente definida y aun así cansa leerla a 60 cm.
+
+Resultado práctico: **el texto disponible es la mitad de lo estimado** — ~17
+caracteres por línea en vez de ~30. Sigue siendo mucho más que una OLED de 0.96"
+(20 × 4), pero el RF-04 (letras) tiene menos margen del que parecía.
 
 ## Notas y sorpresas
 
