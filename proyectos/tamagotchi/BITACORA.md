@@ -581,6 +581,37 @@ instante, durante el handshake TLS. Sigue holgado.
 comparables.** Mismo binario, mismo punto del ciclo, suficientes muestras.
 Detalle en [`5-investigacion/memoria-en-regimen-2.md`](5-investigacion/memoria-en-regimen-2.md).
 
+### ⏱️ El reloj daba saltos + transición entre frases
+
+**El tiempo transcurrido retrocedía.** Dos causas:
+
+1. **La corrección de golpe.** Entre consultas el progreso se calcula con el reloj
+   interno, y nunca coincide exacto con lo que reporta Spotify. Al llegar la
+   respuesta se sobrescribía de golpe: si íbamos 300 ms adelantados, el número
+   **retrocedía** (`1:24 → 1:23 → 1:24`).
+   Ahora se distingue: diferencia **> 1,5 s** = alguien movió la canción, se
+   resincroniza de golpe; diferencia pequeña = deriva, se corrige **un 20% cada
+   vez**. 🔑 Es lo que hacen los relojes de red: no se ajustan de un tirón, se
+   arrastran. Un salto atrás se nota mucho más que un error de 300 ms.
+
+2. **El parpadeo.** El bloque de tiempos se borraba y redibujaba 10 veces por
+   segundo aunque el texto fuera idéntico. Ahora solo se repinta cuando cambia.
+
+**La transición entre frases** es un fundido de gris oscuro a blanco en ~170 ms,
+y **no cuesta memoria**. El enfoque obvio (un buffer para mezclar) serían 53 KB
+para la zona de la letra. No hace falta: las letras son de **un solo bit**, así
+que dibujar el mismo texto encima con un gris más claro solo aclara esos píxeles.
+Sin borrado no hay parpadeo.
+
+🔑 **Un efecto visual no siempre necesita un buffer.** Si el contenido no cambia
+entre fotogramas —solo su color, y siempre hacia más claro— basta con dibujar
+encima.
+
+**Y un arreglo que salió observando:** una entrada de LRCLIB puede existir y dar
+`HTTP 200` pero **sin letra sincronizada**. Rendirse con el primer candidato
+desperdicia otras versiones que sí la tienen. Ahora se prueban los **tres**
+mejores por duración.
+
 ### 🧠 Las pausas del desplazamiento: eran la RED, no el texto
 
 Tras arreglar el bucle del texto, las pausas seguían. La causa real era otra:

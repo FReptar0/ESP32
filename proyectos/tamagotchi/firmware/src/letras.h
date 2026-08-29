@@ -276,18 +276,43 @@ inline bool Letras::pedirPorBusqueda(const uint8_t* ca, const String& t,
   https.end();
   if (err) { Serial.printf("[Letra] búsqueda JSON: %s\n", err.c_str()); return false; }
 
-  // Elegir el resultado cuya duración más se parezca a la nuestra.
-  long mejorId = -1, mejorDif = 999999;
+  /* --------------------------------------------------------------
+   *  Se guardan los TRES mejores candidatos, no solo el mejor.
+   *
+   *  Motivo, visto en la práctica: una entrada puede existir y
+   *  responder HTTP 200 pero NO tener letra sincronizada (solo el
+   *  texto plano). Quedarse con el mejor por duración y rendirse si
+   *  ese no sirve desperdicia las otras versiones, que muchas veces
+   *  sí la tienen.
+   *
+   *  No se puede saber de antemano cuál tiene letra sincronizada sin
+   *  descargarla: ese campo es justo el que pesa. Así que se prueban
+   *  por orden de parecido, hasta tres. Cada intento son ~8 KB.
+   * -------------------------------------------------------------- */
+  const int MAX_CAND = 3;
+  long ids[MAX_CAND]  = { -1, -1, -1 };
+  long difs[MAX_CAND] = { 999999, 999999, 999999 };
+
   for (JsonObject o : doc.as<JsonArray>()) {
     long d = (long)(o["duration"] | 0.0);
     long dif = labs(d - segs);
-    if (dif < mejorDif) { mejorDif = dif; mejorId = o["id"] | -1; }
+    long id = o["id"] | -1;
+    if (id < 0 || dif > 5) continue;          // otra versión, no sirve
+    for (int i = 0; i < MAX_CAND; i++) {
+      if (dif < difs[i]) {                    // insertar en orden
+        for (int j = MAX_CAND - 1; j > i; j--) { difs[j] = difs[j-1]; ids[j] = ids[j-1]; }
+        difs[i] = dif; ids[i] = id;
+        break;
+      }
+    }
   }
-  Serial.printf("[Letra] mejor coincidencia: id=%ld (±%ld s)\n", mejorId, mejorDif);
 
-  // Más de 5 segundos de diferencia casi seguro es otra versión.
-  if (mejorId < 0 || mejorDif > 5) return false;
-  return pedirPorId(ca, mejorId);
+  for (int i = 0; i < MAX_CAND; i++) {
+    if (ids[i] < 0) break;
+    Serial.printf("[Letra] candidato %d: id=%ld (±%ld s)\n", i + 1, ids[i], difs[i]);
+    if (pedirPorId(ca, ids[i])) return true;
+  }
+  return false;
 }
 
 inline bool Letras::buscar(const uint8_t* ca, const char* titulo, const char* artista,

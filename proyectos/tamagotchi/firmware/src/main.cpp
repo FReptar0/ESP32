@@ -346,6 +346,48 @@ void dibujarNotas(int cx, int y, uint16_t color) {
   dibujarNota(cx + 4,  y + 4, color);
 }
 
+/* ============================================================
+ *  Transición entre líneas
+ * ============================================================
+ *  La frase nueva no aparece de golpe: se dibuja varias veces,
+ *  cada una un poco más clara, hasta llegar al blanco.
+ *
+ *  El truco está en que NO hace falta borrar entre paso y paso.
+ *  Las letras son de un solo bit (cada píxel está o no está), y
+ *  cada pasada solo ACLARA los mismos píxeles. Sin borrado no hay
+ *  parpadeo, y no cuesta nada de memoria extra.
+ * ============================================================ */
+const int PASOS_FUNDIDO = 6;
+const int MS_POR_PASO   = 28;
+const uint8_t NIVELES[PASOS_FUNDIDO] = { 70, 110, 150, 190, 225, 255 };
+
+int   pasoFundido = PASOS_FUNDIDO;      // terminado
+unsigned long ultimoPaso = 0;
+
+// Guardamos cómo quedó repartida la frase para poder repintarla sin
+// recalcular nada en cada paso del fundido.
+String lineasFrase[4];
+int    numLineasFrase = 0, yFrase = 0, altoFrase = 0;
+bool   fraseGrande = true;
+
+inline uint16_t grisNivel(uint8_t v) {
+  return ((v >> 3) << 11) | ((v >> 2) << 5) | (v >> 3);
+}
+
+void pintarFrase(uint16_t color) {
+  for (int i = 0; i < numLineasFrase; i++)
+    escribir(lineasFrase[i], yFrase + i * altoFrase, fraseGrande, color);
+}
+
+// Da un paso del fundido. Se llama desde el bucle de dibujo.
+void avanzarFundido() {
+  if (pasoFundido >= PASOS_FUNDIDO || numLineasFrase == 0) return;
+  if (millis() - ultimoPaso < MS_POR_PASO) return;
+  ultimoPaso = millis();
+  pintarFrase(grisNivel(NIVELES[pasoFundido]));
+  pasoFundido++;
+}
+
 void zonaLetra(int idx) {
   tft.fillRect(0, Y_LETRA, 240, ALTO_LETRA, TFT_BLACK);
 
@@ -370,6 +412,7 @@ void zonaLetra(int idx) {
   //  claro que el aparato está vivo.
   // ------------------------------------------------------------------
   if (enSilencio) {
+    numLineasFrase = 0; pasoFundido = PASOS_FUNDIDO;
     int sig = siguienteConTexto(idx < 0 ? 0 : idx + 1);
 
     String s2[3]; bool g2 = false; int ns = 0;
@@ -389,12 +432,17 @@ void zonaLetra(int idx) {
   // ------------------------------------------------------------------
   //  CANTANDO: la frase actual grande y blanca, con contexto en gris.
   // ------------------------------------------------------------------
-  String c[4]; bool grande = true;
-  int n = partirConReserva(String(letras.lineas[idx].texto), ANCHO, c, 3, grande);
+  numLineasFrase = partirConReserva(String(letras.lineas[idx].texto), ANCHO,
+                                    lineasFrase, 3, fraseGrande);
+  int n = numLineasFrase;
+  bool grande = fraseGrande;
+  String* c = lineasFrase;
 
   int alto = grande ? ALTO_GRANDE : ALTO_CHICA;
+  altoFrase = alto;
   int bloque = n * alto;
   int y = Y_LETRA + (ALTO_LETRA - bloque) / 2;
+  yFrase = y;
 
   // El contexto solo se dibuja si sobra sitio: cuando la frase actual es
   // larga, ella manda.
@@ -409,7 +457,11 @@ void zonaLetra(int idx) {
     }
   }
 
-  for (int i = 0; i < n; i++) escribir(c[i], y + i * alto, grande, TFT_WHITE);
+  // Arranca el fundido: se pinta en gris oscuro y el bucle de dibujo la
+  // irá aclarando hasta el blanco.
+  pasoFundido = 0;
+  ultimoPaso = 0;
+  pintarFrase(grisNivel(NIVELES[0]));
 
   if (hayHueco) {
     int sig = siguienteConTexto(idx + 1);
@@ -429,9 +481,17 @@ void barraProgreso() {
   tft.fillRect(MARGEN, Y_BARRA, lleno, 5, sonando ? VERDE_SPOTIFY : GRIS);
   tft.fillRect(MARGEN + lleno, Y_BARRA, ANCHO - lleno, 5, GRIS_LINEA);
 
+  // El texto solo se repinta cuando CAMBIA de segundo. Antes se borraba
+  // y se volvía a dibujar 10 veces por segundo, y ese borrado constante
+  // se percibía como un parpadeo.
+  static String tiempoPintado;
   char a[12], b[12];
   snprintf(a, sizeof(a), "%ld:%02ld", p / 60000, (p / 1000) % 60);
   snprintf(b, sizeof(b), "%ld:%02ld", duracionMs / 60000, (duracionMs / 1000) % 60);
+  String ahoraTxt = String(a) + "/" + String(b);
+  if (ahoraTxt == tiempoPintado) return;
+  tiempoPintado = ahoraTxt;
+
   tft.fillRect(0, Y_TIEMPOS, 240, 18, TFT_BLACK);
   usarFuente(false);
   tft.setTextColor(GRIS, TFT_BLACK);
@@ -659,10 +719,44 @@ void consultar() {
   const char* titulo  = doc["item"]["name"] | "(sin título)";
   const char* album   = doc["item"]["album"]["name"] | "";
   const char* artista = doc["item"]["artists"][0]["name"] | "";
-  progresoBase = doc["progress_ms"] | 0;
+  long progresoReportado = doc["progress_ms"] | 0;
   duracionMs   = doc["item"]["duration_ms"] | 0;
   sonando      = doc["is_playing"] | false;
-  instanteBase = millis() - viaje / 2;      // compensar el viaje de red
+
+  /* --------------------------------------------------------------
+   *  Por qué el reloj daba saltitos
+   * --------------------------------------------------------------
+   *  Entre consulta y consulta, el progreso se CALCULA con el reloj
+   *  del ESP32. Ese cálculo nunca coincide exactamente con lo que
+   *  Spotify reporta: hay unos cientos de milisegundos de diferencia
+   *  por la red y por cómo mide cada uno.
+   *
+   *  Al llegar cada respuesta se sobrescribía el progreso de golpe.
+   *  Si nuestra cuenta iba 300 ms adelantada y el segundo acababa de
+   *  cambiar, el número RETROCEDÍA: 1:24 -> 1:23 -> 1:24. Eso era el
+   *  salto, y ocurría a cada consulta.
+   *
+   *  Ahora se distingue entre dos casos:
+   *
+   *    · Diferencia GRANDE (>1,5 s)  -> alguien movió la canción o
+   *      cambió de pista: hay que resincronizar de golpe.
+   *    · Diferencia PEQUEÑA          -> es solo deriva. Se corrige
+   *      un 20% cada vez, así el reloj se acerca poco a poco sin
+   *      dar nunca un salto visible.
+   *
+   *  Es la misma idea que usan los relojes de red: no se ajustan de
+   *  un tirón, se van "arrastrando" hacia la hora correcta.
+   * -------------------------------------------------------------- */
+  long estimado = progresoAhora();
+  long diferencia = progresoReportado - estimado;
+
+  if (instanteBase == 0 || labs(diferencia) > 1500) {
+    progresoBase = progresoReportado;
+    instanteBase = millis() - viaje / 2;     // compensar el viaje de red
+  } else {
+    progresoBase = estimado + diferencia / 5;
+    instanteBase = millis();
+  }
 
   String clave = String(titulo) + "|" + String(artista);
   if (clave != claveActual) {
@@ -812,6 +906,7 @@ void loop() {
       });
       barraProgreso();
     }
+    avanzarFundido();
     moverBarra(sonando ? VERDE_SPOTIFY : GRIS);
   }
   delay(5);
