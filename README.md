@@ -32,7 +32,7 @@ ESP32/
 
 | Proyecto | Qué es | Estado |
 |---|---|---|
-| [🐣 tamagotchi](proyectos/tamagotchi/) | Aparato con ESP32 que muestra qué suena en Spotify | 🔴 Bloqueado: ninguna placa ESP32 es detectada por la Mac |
+| [🐣 tamagotchi](proyectos/tamagotchi/) | Aparato con ESP32 que muestra qué suena en Spotify | 🟢 Leyendo Spotify con TLS verificado · falta la pantalla |
 
 ---
 

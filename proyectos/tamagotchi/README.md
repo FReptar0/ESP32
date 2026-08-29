@@ -7,7 +7,7 @@ Un aparatito de escritorio con ESP32 que muestra qué estás escuchando en Spoti
 > que reacciona a tu música), no por lo que hace hoy. La v1 es "una pantalla que
 > muestra la canción", que ya trae bastante trabajo.
 
-- **Estado:** 🟢 Placa funcionando · siguiente paso: conectar a WiFi
+- **Estado:** 🟢 Leyendo Spotify · siguiente paso: la pantalla
 - **Tipo:** Proyecto de descubrimiento (se compran piezas sobre la marcha)
 - **Objetivo real:** aprender electrónica e IoT
 
@@ -17,46 +17,53 @@ Un aparatito de escritorio con ESP32 que muestra qué estás escuchando en Spoti
 
 ```mermaid
 graph LR
-    A["1 · Blink +<br/>info chip"] --> B["2 · WiFi"]
+    A["1 · Blink"] --> B["2 · WiFi"]
     B --> C["3 · HTTPS +<br/>medir RAM"]
-    C --> D["4 · OAuth<br/>una vez"]
+    C --> D["4 · OAuth"]
     D --> E["5 · Renovar<br/>token solo"]
     E --> F["6 · Leer la<br/>canción"]
     F --> G["7 · Dibujar en<br/>pantalla"]
-    G --> H["8 · Letras<br/>sincronizadas"]
+    G --> H["8 · Letras"]
 
     style A fill:#2d4a2d,color:#fff
     style B fill:#2d4a2d,color:#fff
     style C fill:#2d4a2d,color:#fff
-    style D fill:#5a4a2d,color:#fff
+    style D fill:#2d4a2d,color:#fff
+    style E fill:#2d4a2d,color:#fff
+    style F fill:#2d4a2d,color:#fff
+    style G fill:#5a4a2d,color:#fff
 ```
 
-✅ **Pasos 1, 2 y 3 hechos.** El punto de control del proyecto quedó superado.
+✅ **Pasos 1 al 6 hechos.** El ESP32 lee Spotify por su cuenta, con el
+certificado del servidor verificado:
 
 ```
-Chip:     ESP32-D0WD-V3, 2 núcleos @ 240 MHz, 4 MB flash
-WiFi:     192.168.1.96 · −45 dBm · conecta en < 1 s
-TLS:      handshake en 1.088 ms contra accounts.spotify.com
-RAM:      mínimo 199.4 KB con TLS activo (umbral: 100 KB)
-          sin fugas · sin fragmentación
+┌──────────────────────────────────────────────
+│ 🎵  Fashion Drunk
+│ 👤  Otis Stacks
+│ 💿  Otis Stacks
+└──────────────────────────────────────────────
+  ▶ [==============      ] 2:26 / 3:26   RAM: 198 KB
 ```
 
-### 🔜 Siguiente: paso 4 — OAuth
+Cada paso se atacó solo cuando el anterior funcionaba. Es lento a propósito: si
+saltas pasos y algo falla, tienes seis sospechosos en vez de uno.
 
-Crear la app en <https://developer.spotify.com/dashboard> y hacer el baile de
-autorización una vez desde la Mac, para obtener el `refresh_token`.
+### 🔜 Siguiente: paso 7 — la pantalla
 
-> ⚠️ **Redirect URI: `http://127.0.0.1:8888/callback`**
-> `localhost` **no** se acepta desde abril de 2025. Los tutoriales viejos fallan.
+Es lo único que falta para cerrar RF-01, RF-02 y RF-03. **Los datos ya están**;
+hay que dibujarlos.
 
-### 🎯 Riesgo #1 actual: los certificados raíz TLS
+1. Cablear la GMT130 → [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md)
+2. Decidir el ADR-0008: `TFT_eSPI` vs `Adafruit_ST7789`
+3. Diseñar la pantalla: qué va grande, qué chico, qué colores
 
-El spike de memoria usó `setInsecure()` (no valida el certificado del servidor).
-Válido para medir, no para el firmware final. Hay que decidir cómo validarlos —
-futuro **ADR-0009**.
+### Pendientes menores
 
-Es el único riesgo del proyecto donde el aparato **deja de funcionar solo, un
-día, sin que nadie haya tocado nada**.
+- Prueba de resistencia de 24 h para cerrar el RNF-06 del todo
+- Timeout en la sincronización NTP (hoy espera para siempre si falla)
+- **S-05:** probar a mano en LRCLIB 5 canciones que escuches, para saber si las
+  letras (RF-04) son viables antes de invertirles tiempo
 
 ## Cómo está organizado
 
@@ -65,37 +72,14 @@ Las carpetas siguen las 6 fases de la
 
 | Carpeta | Qué contiene | Estado |
 |---|---|---|
-| [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟢 4 escritos · solo el 0003 sigue abierto |
+| [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟢 6 escritos · solo el 0003 sigue abierto |
 | [`2-entorno/`](2-entorno/) | El entorno aislado y cómo levantarlo | 🟢 Funcionando · recompila en ~28 s |
 | [`3-componentes/`](3-componentes/) | Ficha de cada pieza | 🟢 ESP32 y GMT130 confirmados |
 | [`4-requerimientos/`](4-requerimientos/) | Qué tiene que hacer el aparato | 🟢 Borrador listo |
-| [`5-investigacion/`](5-investigacion/) | Lo que hubo que averiguar, con fuentes | 🟢 API de Spotify verificada |
+| [`5-investigacion/`](5-investigacion/) | Lo que hubo que averiguar, con fuentes | 🟢 7 hallazgos documentados |
 | [`6-esquemas/`](6-esquemas/) | El mapa: lógico y físico | 🟢 Los dos listos |
-| `firmware/` | El código | 🟢 WiFi + HTTPS funcionando |
+| `firmware/` | El código | 🟢 Leyendo Spotify con TLS verificado |
 | [`BITACORA.md`](BITACORA.md) | Qué pasó en cada sesión | 🟢 Al día |
-
----
-
-## Por dónde va la cosa
-
-```mermaid
-graph LR
-    A["🔌 Que el ESP32<br/>sea detectado"] --> C["💡 Blink<br/>(¿vive la placa?)"]
-    C --> D["📡 Conectar<br/>a WiFi"]
-    D --> E["🔑 Autenticar<br/>con Spotify"]
-    E --> F["🎵 Leer la<br/>canción actual"]
-    F --> G["📺 Mostrarla<br/>en pantalla"]
-    G --> H["📝 Letras<br/>sincronizadas"]
-
-    style A fill:#5a2d2d,color:#fff
-```
-
-Cada paso solo se ataca cuando el anterior funciona. Es lento a propósito: si
-saltas pasos y algo falla, tienes cinco sospechosos en vez de uno.
-
-**Y hay una tarea que se puede hacer en paralelo, sin la placa:** verificar que
-la API de Spotify todavía permite leer "reproduciendo ahora" con una app personal
-(supuesto S-02). Es el riesgo más grande del proyecto y no depende del hardware.
 
 ---
 
@@ -109,6 +93,14 @@ conecta y no sé por qué".
 
 **Los pines del ESP32 son de 3.3 V y no toleran 5 V.** Conectar algo de 5 V a un
 pin de datos es la forma más común de matar una placa. Cuando aplique, te aviso.
+
+**El ESP32 no confía en nadie de fábrica.** Tu Mac tiene un llavero con las
+autoridades certificadoras en las que confía; el ESP32 no tiene nada. Por eso el
+firmware lleva incrustado el paquete de 150 CAs de Mozilla
+([ADR-0009](1-decisiones/ADR-0009-certificados-raiz.md)). Y como verificar un
+certificado exige saber qué día es hoy, sincroniza la hora por NTP antes de
+cualquier conexión — si no, todos los certificados le parecerían "aún no
+válidos".
 
 **Spotify no da letras por su API pública.** Las letras que ves en la app vienen
 de otro proveedor y no están disponibles desde fuera. Van a tener que salir de
@@ -131,9 +123,11 @@ Eso mueve las letras (RF-04) de "probablemente inviable" a "hay que probarlo".
 
 ---
 
-## Decisiones que te toca tomar
+## Decisiones abiertas
 
 | Qué | Dónde | Por qué depende de ti |
 |---|---|---|
 | ~~¿Directo o vía puente?~~ | [ADR-0002](1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) | ✅ Resuelto: **directo**, porque el objetivo es aprender |
 | ~~¿Qué pantalla?~~ | [ADR-0004](1-decisiones/ADR-0004-pantalla-gmt130.md) | ✅ Resuelto: la GMT130 que ya tienes |
+| **¿`TFT_eSPI` o `Adafruit_ST7789`?** | Futuro ADR-0008 | Velocidad contra facilidad de aprendizaje. Es la siguiente |
+| ¿De dónde salen las letras? | [ADR-0003](1-decisiones/ADR-0003-fuente-de-las-letras.md) | Depende de probar la cobertura de LRCLIB con tu música (S-05) |
