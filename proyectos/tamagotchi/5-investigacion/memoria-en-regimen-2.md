@@ -78,3 +78,53 @@ diez bien tomadas, la respuesta fue evidente en cinco minutos.
 
 Y el latido de diagnóstico se queda en el firmware: cuesta una línea cada 30
 segundos y convierte una sospecha recurrente en un dato.
+
+
+---
+
+## Comprobación posterior — con dos núcleos y todas las funciones
+
+Medido de nuevo con el firmware completo (dos núcleos, precarga, sprite,
+fundidos), 11 muestras en 5,5 minutos:
+
+```
+t= 30s   libre 155.716   minimo 73.412   bloque mayor  94.196
+t= 60s   libre 200.988   minimo 65.972   bloque mayor 110.580
+t=120s   libre 157.256   minimo 65.972   bloque mayor  77.812
+t=180s   libre 198.132   minimo 65.972   bloque mayor 110.580
+t=210s   libre 151.376   minimo 63.648   bloque mayor  77.812
+t=270s   libre 200.980   minimo 63.648   bloque mayor 110.580
+t=330s   libre 200.980   minimo 63.648   bloque mayor 110.580
+```
+
+### Lo que parecía preocupante y no lo es
+
+A primera vista hay dos señales de alarma: la memoria libre **oscila** entre 151 y
+201 KB, y el bloque contiguo mayor baja de 110 KB a 61 KB.
+
+Pero fíjate en el patrón: **siempre vuelve a 110.580**. Exactamente el mismo
+número de siempre.
+
+Eso descarta la fragmentación permanente. Los valores bajos son **transitorios**,
+del momento en que se está descargando una letra: se reservan buffers grandes, y
+al terminar se devuelven **enteros**. Si hubiera fragmentación de verdad, el
+bloque mayor bajaría y **no volvería a subir**.
+
+🔑 **Un valor que sube y baja no es una fuga ni fragmentación: es uso normal.** Lo
+que hay que vigilar es que **vuelva al mismo sitio**. Aquí vuelve al byte exacto.
+
+### El número que importa
+
+| | |
+|---|---|
+| Libre en reposo | ~201 KB |
+| Libre durante una descarga | ~151 KB |
+| **Mínimo histórico** | **63,6 KB** — y estable en las últimas 5 muestras |
+
+Los 63 KB son el peor instante posible: red y dibujo trabajando a la vez en los
+dos núcleos, con TLS activo. Bajó desde los 97 KB de antes porque ahora las dos
+cosas **coinciden en el tiempo** en vez de turnarse — que es justamente lo que se
+buscaba al repartirlas.
+
+Sigue siendo margen de sobra, y **dejó de bajar**: las últimas cinco muestras dan
+el mismo valor.
