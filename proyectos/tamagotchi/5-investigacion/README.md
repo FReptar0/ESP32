@@ -11,27 +11,15 @@ mal"* de *"esto funcionaba y cambió"*.
 
 ## 🔴 Pendientes, en orden de urgencia
 
-### 1. ¿La API de Spotify sigue permitiendo leer "reproduciendo ahora"?
+### 1. ⚠️ ¿Tienes Spotify Premium?
 
-**Este es el riesgo número uno del proyecto.** Si la respuesta es no, no hay
-código que lo arregle: sería otro proyecto.
+**Nuevo bloqueante, salido de la investigación de la API.** Spotify exige que
+*"el dueño de la app tenga una cuenta Premium para que las apps en modo
+desarrollo funcionen"*. Sin Premium no hay proyecto, y no hay forma de
+programarlo alrededor.
 
-Corresponde al supuesto
-[S-02](../4-requerimientos/REQUERIMIENTOS.md#supuestos).
-
-Qué hay que responder:
-
-- ¿El endpoint `/me/player/currently-playing` sigue disponible en 2026?
-- ¿Una app en **modo desarrollo** (uso personal, sin revisión de Spotify) puede
-  usarlo? ¿Cuántos usuarios permite?
-- ¿Qué permisos (*scopes*) hace falta pedir?
-- ¿Cuál es el límite de peticiones? Esto decide cada cuánto puede preguntar el
-  ESP32.
-- ¿Devuelve `progress_ms`? Ese dato es el que después permitiría sincronizar las
-  letras.
-
-> **Se puede hacer sin la placa.** No depende del hardware, así que es la tarea
-> ideal mientras el ESP32 no responde.
+Se responde en 5 segundos. Ver
+[`spotify-api-2026.md`](spotify-api-2026.md).
 
 ### 2. ¿Cuánta RAM libre queda en el ESP32 con TLS activo?
 
@@ -55,6 +43,21 @@ aparecen, hay que replantear el RF-04 antes de invertir tiempo en él.
 ---
 
 ## ✅ Hallazgos
+
+### 2026-08-29 — ✅ La API de Spotify sí sirve para este proyecto (resuelve S-02)
+
+**Qué se averiguó:** `GET /me/player/currently-playing` sigue activo, devuelve
+título, álbum, artistas, duración y **`progress_ms`**, y **no** fue afectado ni
+por los recortes de noviembre de 2024 ni por las restricciones de febrero de 2026.
+Scope necesario: `user-read-currently-playing`.
+⚠️ **Pero el Modo Desarrollo exige que el dueño de la app tenga Spotify Premium.**
+**Fuente:** documentación oficial — ver [`spotify-api-2026.md`](spotify-api-2026.md).
+**Por qué importa:** era el riesgo #1 del proyecto, el único que no se podía
+resolver programando. Queda cerrado.
+**Confianza:** alta (fuentes primarias).
+**Consecuencia:** S-02 resuelto ✅ · se abre el supuesto S-09 (Premium) 🔴 ·
+se desbloquea el [ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md).
+
 
 ### 2026-08-29 — La placa es un ESP32-D0WD-V3 con USB-Serie CP2102
 
