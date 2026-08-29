@@ -7,62 +7,55 @@ Un aparatito de escritorio con ESP32 que muestra qué estás escuchando en Spoti
 > que reacciona a tu música), no por lo que hace hoy. La v1 es "una pantalla que
 > muestra la canción", que ya trae bastante trabajo.
 
-- **Estado:** 🔴 Bloqueado — el ESP32 no responde
+- **Estado:** 🟢 Placa funcionando · siguiente paso: conectar a WiFi
 - **Tipo:** Proyecto de descubrimiento (se compran piezas sobre la marcha)
 - **Objetivo real:** aprender electrónica e IoT
 
 ---
 
-## 🚧 Bloqueante actual
+## 📍 Dónde vamos
 
-**Ninguna placa ESP32 aparece en la Mac.** Todo lo demás está listo, pero sin
-placa no hay firmware.
+```mermaid
+graph LR
+    A["1 · Blink +<br/>info del chip"] --> B["2 · Conectar<br/>a WiFi"]
+    B --> C["3 · HTTPS +<br/>medir RAM"]
+    C --> D["4 · OAuth<br/>una vez"]
+    D --> E["5 · Renovar<br/>token solo"]
+    E --> F["6 · Leer la<br/>canción"]
+    F --> G["7 · Dibujarla<br/>en pantalla"]
+    G --> H["8 · Letras<br/>sincronizadas"]
 
-### 🎯 La prueba que hay que hacer primero
+    style A fill:#2d4a2d,color:#fff
+    style B fill:#5a4a2d,color:#fff
+```
 
-**Conecta la C-003 — el ESP32 DEVKIT v1, el viejito de puerto mini-USB.**
+✅ **Paso 1 hecho.** La cadena completa funciona: editar → compilar → cargar →
+ejecutar → leer.
 
-Suena raro empezar por la placa más vieja, pero es la que más información da, y
-la razón es esta:
+```
+Chip:      ESP32-D0WD-V3, 2 núcleos @ 240 MHz, 4 MB flash
+RAM libre: 303.5 KB          ← la línea base a vigilar
+Red:       INFINITUMEB00, canal 11, −39 dBm (excelente)
+```
 
-> El estándar USB-C exige que todo aparato lleve **dos resistencias de 5.1 kΩ**
-> en unas líneas llamadas CC, para poder decirle a la computadora *"aquí estoy,
-> dame corriente"*. **Muchísimas placas ESP32 baratas con USB-C las omiten.** El
-> fabricante probó con un cable USB-A → USB-C y le funcionó — porque un puerto
-> USB-A entrega 5 V sin preguntar. Pero un puerto USB-C **no entrega nada hasta
-> que el otro lado se identifica**.
->
-> | Cable | Qué pasa |
-> |---|---|
-> | USB-A → USB-C | ✅ Funciona |
-> | USB-C → USB-C | ❌ **Nada. Ni corriente, ni detección** |
->
-> Tu Mac es Apple Silicon: puertos USB-C. Lo natural fue agarrar un cable C-a-C.
-> Y el síntoma encaja exacto: cero dispositivos en el árbol USB, como si no
-> hubiera nada conectado.
+### 🔜 Siguiente: paso 2 — conectar a WiFi
 
-La C-003 tiene **mini-USB**, así que por fuerza usa un cable A-a-mini y **no
-puede tener este problema**. Por eso es la prueba decisiva:
+Solo falta la contraseña de la red, y **no hace falta que la escribas en el chat**:
 
-- ✅ **Si aparece** → hipótesis confirmada. Se arregla con un cable USB-A → USB-C,
-  y además ya tienes una placa con la que empezar hoy mismo.
-- ❌ **Si tampoco aparece** → el problema no son las placas: es el cable (que sea
-  de solo carga) o el dock.
+```bash
+cd proyectos/tamagotchi/firmware
+cp include/secrets.h.ejemplo include/secrets.h
+# abre include/secrets.h y rellena WIFI_PASSWORD
+```
 
-En los dos casos sales del bloqueo sabiendo más.
+`secrets.h` está bloqueado por `.gitignore`, así que nunca se sube al repositorio
+(RNF-05). La plantilla `.ejemplo` sí se sube: guarda la *estructura* de lo que
+hace falta, nunca los valores.
 
-### Si no tienes cable mini-USB a la mano
-
-Prueba estas, en orden, con las placas USB-C:
-
-1. **Un cable USB-A → USB-C**, con la punta A en un puerto USB-A (tu dock tiene)
-   o en un adaptador A-a-C.
-2. **Que el cable sea de datos, no de solo carga.** Muchos cables (los de power
-   banks, audífonos) llevan corriente pero no datos: la placa enciende su LED y
-   la compu nunca la ve.
-3. **Directo a la Mac**, no al dock DisplayLink.
-
-Después de cada intento dime "ya" y yo corro el diagnóstico.
+**El paso 3 es el importante:** medir cuánta RAM queda con TLS activo. Es el punto
+de control del [ADR-0002](1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md)
+y el riesgo #1 del proyecto. Si el número no alcanza, hay que replantear la
+arquitectura — y por eso se mide **antes** de escribir la lógica de Spotify.
 
 ## Cómo está organizado
 
@@ -71,13 +64,13 @@ Las carpetas siguen las 6 fases de la
 
 | Carpeta | Qué contiene | Estado |
 |---|---|---|
-| [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟡 4 escritos, 2 sin decidir |
+| [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟢 4 escritos · solo el 0003 sigue abierto |
 | [`2-entorno/`](2-entorno/) | El entorno aislado y cómo levantarlo | 🟢 PlatformIO 6.1.19 + esptool 5.3.1 instalados |
-| [`3-componentes/`](3-componentes/) | Ficha de cada pieza | 🟡 GMT130 ✅ confirmada · ESP32 pendiente |
+| [`3-componentes/`](3-componentes/) | Ficha de cada pieza | 🟢 ESP32 y GMT130 confirmados |
 | [`4-requerimientos/`](4-requerimientos/) | Qué tiene que hacer el aparato | 🟢 Borrador listo |
-| [`5-investigacion/`](5-investigacion/) | Lo que hubo que averiguar, con fuentes | 🔴 Sin empezar |
+| [`5-investigacion/`](5-investigacion/) | Lo que hubo que averiguar, con fuentes | 🟢 API de Spotify verificada |
 | [`6-esquemas/`](6-esquemas/) | El mapa: lógico y físico | 🟢 Los dos listos |
-| `firmware/` | El código | 🔴 Sin empezar |
+| `firmware/` | El código | 🟢 Prueba de vida corriendo en la placa |
 | [`BITACORA.md`](BITACORA.md) | Qué pasó en cada sesión | 🟢 Al día |
 
 ---
@@ -141,5 +134,5 @@ Eso mueve las letras (RF-04) de "probablemente inviable" a "hay que probarlo".
 
 | Qué | Dónde | Por qué depende de ti |
 |---|---|---|
-| ¿El ESP32 habla directo con Spotify, o vía un puente en la Mac? | [ADR-0002](1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) | Es un balance entre "aprendo más" y "avanzo más rápido" |
+| ~~¿Directo o vía puente?~~ | [ADR-0002](1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) | ✅ Resuelto: **directo**, porque el objetivo es aprender |
 | ~~¿Qué pantalla?~~ | [ADR-0004](1-decisiones/ADR-0004-pantalla-gmt130.md) | ✅ Resuelto: la GMT130 que ya tienes |

@@ -85,9 +85,9 @@ que el proyecto pueda terminarse:
 | S-01 | ~~Al menos una placa ESP32 funciona~~ | ✅ **Resuelto** — C-001 identificada y respondiendo | — |
 | S-02 | ~~La API de Spotify permite leer "reproduciendo ahora"~~ | ✅ **Resuelto** — sí, ver [investigación](../5-investigacion/spotify-api-2026.md) | — |
 | S-03 | ~~Hay una pantalla disponible~~ | ✅ **Resuelto** — 4× GMT130 240×240 en inventario | — |
-| S-04 | El ESP32 tiene RAM suficiente para HTTPS + JSON a la vez | ❌ No | Obligaría a la arquitectura de puente del [ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) |
+| S-04 | El ESP32 tiene RAM suficiente para HTTPS + JSON a la vez | 🔄 **Base medida: 303.5 KB libres.** Falta medir con TLS activo | 🎯 **Riesgo #1 actual.** Obligaría a reabrir el [ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) y migrar al puente |
 | S-05 | Existe una fuente gratuita de letras sincronizadas para tu música | ❌ No | Solo RF-04. El resto sobrevive |
-| S-06 | El WiFi de casa es 2.4 GHz | 🔄 En curso — el firmware de prueba escanea las redes | RF-05. ⚠️ **El ESP32 no se conecta a redes de 5 GHz** |
+| S-06 | ~~El WiFi de casa es 2.4 GHz~~ | ✅ **Resuelto** — el ESP32 ve `INFINITUMEB00` a −39 dBm, canal 11 | — |
 | S-07 | ~~La GMT130 es 3.3 V y ST7789~~ | ✅ **Resuelto** — confirmado en la placa | — |
 | S-08 | ~~Faltan las resistencias CC en las placas USB-C~~ | ✅ **Descartado** — C-001 enumeró directo en el puerto USB-C. Era el cable |
 | S-09 | ~~Tienes una cuenta Spotify Premium~~ | ✅ **Resuelto** — plan Familiar, como titular | — |
@@ -116,6 +116,7 @@ que el proyecto pueda terminarse:
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
+| 2026-08-29 | S-06 resuelto; S-04 con línea base medida | Primer firmware cargado con éxito: 303.5 KB de RAM libre y red de 2.4 GHz confirmada a −39 dBm |
 | 2026-08-29 | S-02 resuelto (la API sirve); nuevo S-09 (Premium) como bloqueante | Investigación de la API de Spotify. El riesgo #1 se cierra y aparece un prerequisito de cuenta |
 | 2026-08-29 | S-01, S-07 y S-08 resueltos; S-06 en curso; riesgos de hardware cerrados | La placa fue identificada (ESP32-D0WD-V3) y la GMT130 confirmada. El bloqueante era cables USB-C de solo carga |
 | 2026-08-29 | S-03 resuelto; RF-04 sube de `Podría` a `Debería`; riesgos reordenados | Apareció el inventario real: 4× TFT 240×240 a color en vez de la OLED 128×64 supuesta. Con esa resolución las letras dejan de ser una apuesta ([ADR-0004](../1-decisiones/ADR-0004-pantalla-gmt130.md)) |

@@ -44,6 +44,38 @@ aparecen, hay que replantear el RF-04 antes de invertir tiempo en él.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — RAM base del ESP32: 303.5 KB libres
+
+**Qué se averiguó:** recién arrancado, con WiFi inicializado pero sin conexión
+activa, el ESP32 reporta **310.744 bytes libres (303.5 KB)**.
+**Fuente:** prueba propia — `ESP.getFreeHeap()` en el firmware de prueba.
+**Por qué importa:** es la **línea base** contra la que se mide todo lo demás.
+TLS suele consumir entre 30 y 50 KB, así que a primera vista hay margen — pero
+eso hay que medirlo (supuesto S-04), no suponerlo.
+**Confianza:** máxima (medición directa).
+**Consecuencia:** habilita el paso 3 del
+[ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md), que es el
+punto de control de toda la arquitectura.
+
+### 2026-08-29 — ✅ Hay red de 2.4 GHz con señal excelente (resuelve S-06)
+
+**Qué se averiguó:** el escaneo encontró 5 redes. La más fuerte, **`INFINITUMEB00`
+en el canal 11, a −39 dBm** — señal excelente. Las otras 4 son de vecinos, entre
+−67 y −96 dBm.
+**Fuente:** prueba propia — `WiFi.scanNetworks()` desde el ESP32.
+**Por qué importa:** el ESP32 **solo escanea 2.4 GHz**. Que la red aparezca en
+este listado *es* la demostración de que tiene banda de 2.4 GHz. Se acabó el
+clásico "no me conecta y no sé por qué".
+**Confianza:** máxima. Lo dice el propio ESP32, no el router.
+**Consecuencia:** S-06 resuelto ✅. Queda confirmar con el usuario que
+`INFINITUMEB00` es efectivamente su red.
+
+> 💡 **Cómo leer el dBm**, que va a salir otra vez: es la potencia de señal, y es
+> un número **negativo** — cuanto más cerca de cero, mejor.
+> `−30 a −55` excelente · `−55 a −70` buena · `−70 a −80` débil (aquí empiezan
+> las desconexiones) · peor de `−80` casi inutilizable.
+
+
 ### 2026-08-29 — ✅ La API de Spotify sí sirve para este proyecto (resuelve S-02)
 
 **Qué se averiguó:** `GET /me/player/currently-playing` sigue activo, devuelve

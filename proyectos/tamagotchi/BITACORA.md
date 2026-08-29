@@ -141,21 +141,62 @@ primer paso es conectar ese mismo cable a un celular. Si la compu no ve el
 celular, el cable no pasa datos y no hay nada más que investigar. Cuesta 20
 segundos y habría ahorrado las cuatro rondas.
 
-### Lo que se avanzó después
+### ✅ Primer firmware cargado y corriendo
 
-- `platformio.ini` escrito con la placa ya confirmada (`board = esp32dev`).
-- Primer firmware: parpadeo del LED + info del chip + **escaneo de redes WiFi**
-  (que de paso verifica el supuesto S-06, si tu red tiene banda de 2.4 GHz).
-- Fase 6 desbloqueada: plano físico completo en
-  [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md).
+`[SUCCESS] Took 672.46 seconds` — de los cuales casi todo fue descargar el
+toolchain de ESP32 (1.5 GB, solo la primera vez). Las siguientes compilaciones
+son de segundos.
+
+**Lo que reportó la placa:**
+
+```
+Chip:      ESP32-D0WD-V3, 2 núcleos @ 240 MHz, 4 MB flash
+MAC:       84:1F:E8:2C:3E:C4
+RAM libre: 310.744 bytes (303.5 KB)   ← línea base
+Redes:     5 encontradas, todas 2.4 GHz
+           INFINITUMEB00   −39 dBm  canal 11  ← excelente
+```
+
+Dos supuestos resueltos de un tiro:
+
+- **S-06 ✅** — el ESP32 solo escanea 2.4 GHz, así que que la red aparezca *es*
+  la prueba de que tiene esa banda. Y a −39 dBm, con señal inmejorable.
+- **S-04 🔄** — línea base de 303.5 KB establecida. Falta medirla con TLS activo,
+  que es el punto de control del ADR-0002.
+
+### ✅ Investigación de la API de Spotify (resuelve el riesgo #1)
+
+`GET /me/player/currently-playing` sigue vivo, devuelve todo lo que necesitamos
+(incluido el `progress_ms` que habilita las letras sincronizadas) y **quedó fuera**
+de los recortes de nov-2024 y de las restricciones de dev mode de feb-2026.
+
+Apareció y se cerró un prerequisito nuevo: Spotify exige que el dueño de la app
+tenga **Premium**. Confirmado — plan Familiar como titular.
+
+Detalle completo en [`5-investigacion/spotify-api-2026.md`](5-investigacion/spotify-api-2026.md).
+
+### 🎯 Decisión de arquitectura: directo, sin puente
+
+Se cerró el [ADR-0002](1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md)
+con la **opción A**: el ESP32 habla directo con Spotify.
+
+Yo había recomendado empezar por un puente en la Mac. Se descartó, y con buen
+motivo: el objetivo del proyecto es aprender IoT, y la capa que yo proponía mover
+a la Mac —WiFi, TLS, OAuth, JSON con memoria contada— es justamente lo que hay
+que aprender.
 
 ### 🔜 En qué me quedé — siguiente sesión
 
-1. Ver el resultado del escaneo WiFi → resuelve el supuesto S-06.
-2. Armar el cableado de la pantalla siguiendo el plano físico.
-3. **Sin hardware, en paralelo:** verificar el supuesto S-02 (que la API de
-   Spotify siga dando "reproduciendo ahora"). Sigue siendo el riesgo #1 y no
-   depende de la placa.
+**Paso 2: conectar a WiFi.** Bloqueado solo por la contraseña de la red. Ya está
+la plantilla `firmware/include/secrets.h.ejemplo`: se copia a `secrets.h` (que
+está en `.gitignore`) y se rellena. La contraseña nunca pasa por el chat ni por
+Git.
+
+**Paso 3: medir la RAM con TLS activo.** Es el punto de control del ADR-0002 y el
+riesgo #1 actual. Si el número no alcanza, hay que reabrir ese ADR.
+
+**En paralelo, sin depender de nada:** armar el cableado de la pantalla siguiendo
+[`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md).
 
 ### Material declarado
 

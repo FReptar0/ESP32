@@ -58,7 +58,8 @@ Es exactamente el requerimiento
 | `esptool` instalado (diagnóstico de la placa) | ✅ |
 | `platformio.ini` escrito | ✅ `board = esp32dev` (ESP32-D0WD-V3 confirmado) |
 | Placa detectada | ✅ `/dev/cu.usbserial-0001` (CP2102) |
-| Primera compilación | 🔄 En curso |
+| Primera compilación y carga | ✅ `[SUCCESS]` — 672 s (la mayor parte, descarga del toolchain) |
+| Prueba de vida ejecutándose en la placa | ✅ |
 
 > El `platformio.ini` se escribió **después** de confirmar la placa con `esptool`,
 > no antes. Ese orden importa: poner un `board` equivocado compila igual pero
