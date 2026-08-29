@@ -581,6 +581,49 @@ instante, durante el handshake TLS. Sigue holgado.
 comparables.** Mismo binario, mismo punto del ciclo, suficientes muestras.
 Detalle en [`5-investigacion/memoria-en-regimen-2.md`](5-investigacion/memoria-en-regimen-2.md).
 
+### ⛔ Al saltar de canción durante una búsqueda, se atascaba
+
+`buscar()` encadenaba hasta 5 peticiones (~8 s) **sin comprobar nada entre
+medias**, y con `precargarSiguiente()` el núcleo de red podía pasar **más de 10
+segundos** sin preguntarle nada a Spotify. Como el cambio de canción solo se
+detecta preguntando, durante ese rato el aparato era **ciego**.
+
+No había ninguna cancelación: una vez empezaba la búsqueda, iba hasta el final.
+
+**Solución: la búsqueda pasa de bloque a cola de pasos**, y el bucle de red hace
+un paso por vuelta, consultando a Spotify entre medias:
+
+```
+consultar() → paso exacta → consultar() → paso candidatos → consultar() → ...
+```
+
+Si la canción cambió: `[Letra] ⛔ cancelada: cambió la canción`. Retraso máximo de
+~10 s a ~2,4 s.
+
+🔑 **La forma más simple de "cancelar" casi nunca es abortar de verdad: es no
+encadenar.** Hacer un trozo, mirar si sigue teniendo sentido, hacer el siguiente.
+
+Tres detalles que hicieron falta: el resultado solo se publica si la canción no
+cambió; la precarga no se lanza si hay una búsqueda en curso; y tras la precarga
+se fuerza una consulta inmediata.
+
+### 🏷️ El contexto solo funcionaba con playlists
+
+Descuido mío: solo implementé la búsqueda del nombre para playlists. Un álbum
+mostraba literalmente "Album" y un artista, "Reproduciendo".
+
+Ahora: el **álbum** usa el nombre que ya viene en la respuesta de "reproduciendo
+ahora" (cero peticiones extra), el **artista** se pide a `/v1/artists/{id}`, y
+cuando **no hay contexto** se muestra el álbum en vez de un "Reproduciendo" que no
+dice nada. Verificado: `[Contexto] HTTP 200 -> "Liked Songs"`.
+
+### 📐 Mapa de memoria
+
+Documentado en [`6-esquemas/mapa-de-memoria.md`](6-esquemas/mapa-de-memoria.md):
+flash contra RAM, las tres zonas de la RAM (estático, pilas, montón), qué se
+reserva en el arranque y qué se pide y devuelve sobre la marcha, y por qué las
+letras usan un tamaño fijo que **nunca se libera porque nunca se reserva**.
+
 ### ⏱️ El reloj daba saltos + transición entre frases
 
 **El tiempo transcurrido retrocedía.** Dos causas:

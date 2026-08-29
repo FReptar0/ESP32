@@ -50,14 +50,37 @@ public:
     return r;
   }
 
+  /* ------------------------------------------------------------
+   *  Búsqueda POR PASOS, para poder cancelarla
+   * ------------------------------------------------------------
+   *  Antes `buscar()` hacía todo de una vez: hasta 5 peticiones
+   *  seguidas, ~9 segundos en el peor caso. Durante ese rato el
+   *  núcleo de red estaba ocupado y NO le preguntaba a Spotify,
+   *  así que si cambiabas de canción no se enteraba.
+   *
+   *  Ahora cada petición es un PASO independiente. Entre paso y
+   *  paso, el bucle vuelve a consultar a Spotify — y si la canción
+   *  cambió, lo que quedaba de la búsqueda se descarta.
+   *
+   *  No es que se pueda abortar una petición a medias (eso sería
+   *  mucho más complicado). Es que nunca hay más de UNA petición
+   *  encadenada sin comprobar si sigue interesando.
+   * ------------------------------------------------------------ */
+  static const int MAX_CAND = 3;
+  long candidatos[MAX_CAND];
+  int  numCandidatos = 0;
+
+  // Búsqueda completa de una tirada. Bloquea. Se usa para la PRECARGA,
+  // donde no importa: la canción actual ya está en pantalla.
   bool buscar(const uint8_t* bundleCA, const char* titulo, const char* artista,
               const char* album, long duracionMs);
 
-private:
   bool pedirExacta(const uint8_t* ca, const String& t, const String& a,
                    const String& al, long segs);
-  bool pedirPorBusqueda(const uint8_t* ca, const String& t, const String& a, long segs);
+  bool buscarCandidatos(const uint8_t* ca, const String& t, const String& a, long segs);
   bool pedirPorId(const uint8_t* ca, long id);
+
+private:
   bool procesarRespuesta(HTTPClient& https, WiFiClientSecure& cli);
   void parsearLRC(const char* lrc);
 };
@@ -244,7 +267,7 @@ inline bool Letras::pedirPorId(const uint8_t* ca, long id) {
   return ok;
 }
 
-inline bool Letras::pedirPorBusqueda(const uint8_t* ca, const String& t,
+inline bool Letras::buscarCandidatos(const uint8_t* ca, const String& t,
                                      const String& a, long segs) {
   // ⚠️ Esta respuesta pesa ~91 KB: trae la letra COMPLETA de 20 resultados.
   // Cargarla entera sería la mitad de la memoria libre del ESP32.
@@ -289,7 +312,6 @@ inline bool Letras::pedirPorBusqueda(const uint8_t* ca, const String& t,
    *  descargarla: ese campo es justo el que pesa. Así que se prueban
    *  por orden de parecido, hasta tres. Cada intento son ~8 KB.
    * -------------------------------------------------------------- */
-  const int MAX_CAND = 3;
   long ids[MAX_CAND]  = { -1, -1, -1 };
   long difs[MAX_CAND] = { 999999, 999999, 999999 };
 
@@ -307,25 +329,32 @@ inline bool Letras::pedirPorBusqueda(const uint8_t* ca, const String& t,
     }
   }
 
+  // Solo se apuntan los identificadores. Cada uno se descargará en un
+  // paso aparte, dejando que el bucle compruebe entre medias si la
+  // canción sigue siendo la misma.
+  numCandidatos = 0;
   for (int i = 0; i < MAX_CAND; i++) {
     if (ids[i] < 0) break;
+    candidatos[numCandidatos++] = ids[i];
     Serial.printf("[Letra] candidato %d: id=%ld (±%ld s)\n", i + 1, ids[i], difs[i]);
-    if (pedirPorId(ca, ids[i])) return true;
   }
-  return false;
+  return numCandidatos > 0;
 }
 
+// Búsqueda completa, de una tirada. Se usa solo para la PRECARGA: ahí
+// bloquear no molesta, porque la canción actual ya está en pantalla.
 inline bool Letras::buscar(const uint8_t* ca, const char* titulo, const char* artista,
                            const char* album, long duracionMs) {
   limpiar();
   long segs = duracionMs / 1000;
   Serial.printf("\n[Letra] buscando: %s — %s (%lds)\n", titulo, artista, segs);
 
-  // Paso 1: la exacta. ~5 KB, y funciona porque Spotify nos da la duración.
   if (pedirExacta(ca, titulo, artista, album, segs)) return true;
 
-  // Paso 2: solo si falla. Versiones remasterizadas, deluxe, en vivo...
-  if (pedirPorBusqueda(ca, titulo, artista, segs)) return true;
+  if (buscarCandidatos(ca, titulo, artista, segs)) {
+    for (int i = 0; i < numCandidatos; i++)
+      if (pedirPorId(ca, candidatos[i])) return true;
+  }
 
   estado = LETRA_NO_HAY;
   Serial.println("[Letra] ❌ no encontrada");

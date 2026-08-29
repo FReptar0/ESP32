@@ -30,6 +30,32 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — Una búsqueda larga dejaba al aparato ciego a los cambios
+
+**Qué pasaba:** al saltar de canción mientras se descargaba una letra, el aparato
+se quedaba mostrando la anterior. La causa: `buscar()` encadenaba hasta 5
+peticiones (~8 s) **sin comprobar nada entre medias**, y con `precargarSiguiente()`
+el núcleo de red podía pasar más de 10 segundos sin preguntarle nada a Spotify.
+Como el cambio de canción **solo se detecta preguntando**, era ciego.
+**Fuente:** propio — ver [`cancelacion-de-busquedas.md`](cancelacion-de-busquedas.md).
+**Confianza:** máxima (reproducido y corregido).
+**Consecuencia:** la búsqueda pasa de bloque a **cola de pasos**, un paso por
+vuelta del bucle, consultando a Spotify entre medias. Retraso máximo de ~10 s a
+~2,4 s.
+🔑 **La forma más simple de "cancelar" casi nunca es abortar: es no encadenar.**
+
+### 2026-08-29 — El contexto solo se resolvía para playlists
+
+**Qué pasaba:** al reproducir desde un álbum salía literalmente "Album", y desde
+un artista salía "Reproduciendo". Solo las playlists mostraban su nombre real.
+**Causa:** descuido propio — solo implementé la búsqueda del nombre para
+playlists y para el resto puse una etiqueta fija.
+**Consecuencia:** ahora el álbum usa el nombre que **ya viene** en la respuesta de
+"reproduciendo ahora" (cero peticiones extra), el artista se pide a
+`/v1/artists/{id}`, y cuando no hay contexto se muestra el álbum en vez de un
+"Reproduciendo" que no dice nada.
+
+
 ### 2026-08-29 — Cuatro problemas al ver el aparato funcionando
 
 **Qué se encontró y arregló:**

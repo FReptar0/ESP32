@@ -32,6 +32,7 @@ const char* URL_TOKEN   = "https://accounts.spotify.com/api/token";
 const char* URL_CANCION = "https://api.spotify.com/v1/me/player/currently-playing";
 const char* URL_COLA    = "https://api.spotify.com/v1/me/player/queue";
 const char* URL_PLAYLIST = "https://api.spotify.com/v1/playlists/";
+const char* URL_ARTISTA  = "https://api.spotify.com/v1/artists/";
 
 // Cada cuánto se le pregunta a Spotify. Más seguido = detecta antes las
 // pausas y los cambios, pero se acerca al límite de peticiones (que se
@@ -139,6 +140,24 @@ unsigned long ultimaConsulta = 0, ultimoRefresco = 0;
 SemaphoreHandle_t mutexDatos;
 String tituloAct, artistaAct;
 volatile bool pedirRedibujado = false;   // el núcleo 0 avisa al 1
+
+/* ------------------------------------------------------------
+ *  Búsqueda de letra cancelable
+ * ------------------------------------------------------------
+ *  Antes la letra se buscaba dentro de consultar(), de una tirada:
+ *  hasta 5 peticiones seguidas, ~9 s en el peor caso. Durante ese
+ *  rato no se le preguntaba nada a Spotify, así que si cambiabas
+ *  de canción el aparato no se enteraba y se quedaba atascado.
+ *
+ *  Ahora la búsqueda es una cola de PASOS, y el bucle de red hace
+ *  UN paso por vuelta. Entre paso y paso vuelve a consultar a
+ *  Spotify, y si la canción cambió se tira lo que quedaba.
+ * ------------------------------------------------------------ */
+enum PasoLetra { LETRA_LISTA, LETRA_EXACTA, LETRA_CANDIDATOS, LETRA_PROBAR };
+PasoLetra pasoLetra = LETRA_LISTA;
+int    candidatoActual = 0;
+String claveLetra, tLetra, aLetra, alLetra;
+long   dLetra = 0;
 
 #define CON_DATOS(bloque) do { \
   if (xSemaphoreTake(mutexDatos, portMAX_DELAY) == pdTRUE) { bloque; \
@@ -544,54 +563,80 @@ bool renovarToken() {
 //  El NOMBRE no viene. Hay que pedirlo aparte, una sola vez por
 //  contexto — y se guarda, porque mientras sigas en la misma playlist
 //  no cambia.
-void resolverContexto(const char* uri, const char* tipo) {
-  if (!uri || !*uri) {                    // canción suelta, sin contexto
-    if (contextoUri != "") {
-      contextoUri = ""; nombreContexto = ""; descContexto = ""; estadoPintado = "";
+// Pide un nombre a un endpoint de Spotify quedándose SOLO con el campo
+// "name". El filtro evita cargar la respuesta entera, que en el caso de
+// un artista trae imágenes, géneros y estadísticas que no necesitamos.
+String pedirNombre(const String& url) {
+  WiFiClientSecure cli; cli.setCACertBundle(rootca_crt_bundle_start);
+  HTTPClient https;
+  if (!https.begin(cli, url)) return "";
+  https.addHeader("Authorization", "Bearer " + accessToken);
+  int cod = https.GET();
+  String nombre;
+  if (cod == 200) {
+    JsonDocument filtro; filtro["name"] = true; filtro["description"] = true;
+    JsonDocument doc;
+    if (!deserializeJson(doc, https.getStream(), DeserializationOption::Filter(filtro))) {
+      nombre = aLatin1(String((const char*)(doc["name"] | "")));
+      descContexto = limpiarHTML(String((const char*)(doc["description"] | "")));
+    }
+  }
+  https.end();
+  Serial.printf("[Contexto] HTTP %d -> \"%s\"\n", cod, nombre.c_str());
+  return nombre;
+}
+
+void resolverContexto(const char* uri, const char* tipo,
+                      const char* album, const char* artista) {
+  String u = String(uri ? uri : "");
+
+  if (u.length() == 0) {
+    // Sin contexto: la canción se puso suelta. Mostrar el álbum es mucho
+    // más útil que un "Reproduciendo" que no dice nada.
+    String alt = aLatin1(String(album ? album : ""));
+    if (nombreContexto != alt || contextoUri != "") {
+      contextoUri = ""; descContexto = ""; nombreContexto = alt; estadoPintado = "";
     }
     return;
   }
-  if (contextoUri == uri) return;         // ya lo tenemos resuelto
+  if (contextoUri == u) return;           // ya resuelto, no repetir la petición
 
-  contextoUri = uri;
+  contextoUri = u;
   nombreContexto = "";
   descContexto = "";
   estadoPintado = "";                     // forzar repintado de la barra
 
-  String u = String(uri);
   int corte = u.lastIndexOf(':');
   String id = (corte >= 0) ? u.substring(corte + 1) : "";
   String t = String(tipo ? tipo : "");
 
   if (t == "playlist" && id.length()) {
-    WiFiClientSecure cli; cli.setCACertBundle(rootca_crt_bundle_start);
-    HTTPClient https;
-    // ?fields=name le pide a Spotify que devuelva SOLO el nombre. Sin
-    // eso mandaría la playlist entera: cientos de KB de canciones.
-    if (!https.begin(cli, String(URL_PLAYLIST) + id + "?fields=name,description")) return;
-    https.addHeader("Authorization", "Bearer " + accessToken);
-    int cod = https.GET();
-    if (cod == 200) {
-      JsonDocument doc;
-      if (!deserializeJson(doc, https.getStream())) {
-        nombreContexto = aLatin1(String((const char*)(doc["name"] | "")));
-        descContexto   = limpiarHTML(String((const char*)(doc["description"] | "")));
-      }
-    } else if (cod == 403 || cod == 404) {
-      // Playlist privada: leerla exige el permiso playlist-read-private,
-      // que no se pidió. Se puede añadir volviendo a correr
-      // tools/get-refresh-token.py. Mientras tanto, no es un fallo:
-      // simplemente se muestra el tipo.
-      nombreContexto = "Playlist";
-    }
-    https.end();
-    Serial.printf("[Contexto] playlist -> \"%s\" (HTTP %d)\n", nombreContexto.c_str(), cod);
+    // Solo las playlists tienen descripción, y solo su endpoint acepta
+    // ?fields=. Si es privada hace falta el permiso playlist-read-private.
+    nombreContexto = pedirNombre(String(URL_PLAYLIST) + id + "?fields=name,description");
+    if (!nombreContexto.length()) nombreContexto = "Playlist";
+
   } else if (t == "album") {
-    nombreContexto = "Album";
-  } else if (t == "artist") {
-    nombreContexto = "Artista";
+    // El nombre del álbum YA viene en la respuesta de "reproduciendo
+    // ahora". Pedirlo otra vez sería una petición desperdiciada.
+    nombreContexto = aLatin1(String(album ? album : "Album"));
+
+  } else if (t == "artist" && id.length()) {
+    // Aquí sí hace falta preguntarlo: el contexto puede ser un artista
+    // distinto del primero de la canción (colaboraciones, recopilatorios).
+    nombreContexto = pedirNombre(String(URL_ARTISTA) + id);
+    descContexto = "";                    // los artistas no tienen descripción
+    if (!nombreContexto.length()) nombreContexto = aLatin1(String(artista ? artista : "Artista"));
+
   } else if (t == "collection") {
     nombreContexto = "Tus me gusta";
+
+  } else if (t == "show" || t == "episode") {
+    nombreContexto = "Podcast";
+
+  } else {
+    // Tipo desconocido o nuevo: el álbum siempre es una respuesta útil.
+    nombreContexto = aLatin1(String(album ? album : ""));
   }
 }
 
@@ -714,7 +759,9 @@ void consultar() {
   https.end();
   if (err) { Serial.printf("[API] ❌ JSON: %s\n", err.c_str()); return; }
 
-  resolverContexto(doc["context"]["uri"] | "", doc["context"]["type"] | "");
+  resolverContexto(doc["context"]["uri"] | "", doc["context"]["type"] | "",
+                   doc["item"]["album"]["name"] | "",
+                   doc["item"]["artists"][0]["name"] | "");
 
   const char* titulo  = doc["item"]["name"] | "(sin título)";
   const char* album   = doc["item"]["album"]["name"] | "";
@@ -776,15 +823,16 @@ void consultar() {
 
     if (desdePrecarga) {
       Serial.printf("[Letra] ⚡ desde precarga (%d líneas)\n", letras.n);
+      pasoLetra = LETRA_LISTA;
     } else {
-      // La búsqueda se hace FUERA del mutex: tarda segundos y bloquearía
-      // al núcleo que dibuja. Se escribe sobre `precarga`, que nadie está
-      // mirando, y al final se intercambia en un instante.
+      // No se busca aquí. Se ENCOLA, y el bucle de red irá dando un paso
+      // por vuelta, consultando a Spotify entre medias.
+      claveLetra = clave;
+      tLetra = titulo; aLetra = artista; alLetra = album; dLetra = duracionMs;
+      pasoLetra = LETRA_EXACTA;
+      candidatoActual = 0;
       precarga.limpiar();
-      precarga.buscar(rootca_crt_bundle_start, titulo, artista, album, duracionMs);
-      CON_DATOS({ letras = precarga; precarga.limpiar();
-                  lineaPintada = -2; pedirRedibujado = true; });
-      Serial.printf("[Letra] %d líneas · RAM %lu B\n", letras.n, (unsigned long)ESP.getFreeHeap());
+      Serial.printf("[Letra] buscando: %s — %s (%lds)\n", titulo, artista, duracionMs / 1000);
     }
   }
   if (!nombreContexto.length()) nombreContexto = sonando ? "Reproduciendo" : "En pausa";
@@ -857,10 +905,53 @@ void tareaRed(void*) {
                               ? CERCA_DEL_FIN_MS : cadaCuantoMs;
     if (ahora - ultimaConsulta >= intervalo) { ultimaConsulta = ahora; consultar(); }
 
-    if (!colaPedida && sonando && letras.estado != LETRA_NO_BUSCADA
+    // --- Un paso de la búsqueda de letra, si hay una en curso ---
+    if (pasoLetra != LETRA_LISTA) {
+      // Si la canción cambió mientras tanto, lo que quedaba ya no sirve.
+      if (claveActual != claveLetra) {
+        Serial.println("[Letra] ⛔ cancelada: cambió la canción");
+        pasoLetra = LETRA_LISTA;
+        precarga.limpiar();
+      } else {
+        bool ok = false, terminado = false;
+        const uint8_t* ca = rootca_crt_bundle_start;
+
+        if (pasoLetra == LETRA_EXACTA) {
+          ok = precarga.pedirExacta(ca, tLetra, aLetra, alLetra, dLetra / 1000);
+          pasoLetra = ok ? LETRA_LISTA : LETRA_CANDIDATOS;
+          terminado = ok;
+        } else if (pasoLetra == LETRA_CANDIDATOS) {
+          if (precarga.buscarCandidatos(ca, tLetra, aLetra, dLetra / 1000)) {
+            pasoLetra = LETRA_PROBAR; candidatoActual = 0;
+          } else { pasoLetra = LETRA_LISTA; terminado = true; }
+        } else {                                  // LETRA_PROBAR
+          ok = precarga.pedirPorId(ca, precarga.candidatos[candidatoActual]);
+          candidatoActual++;
+          if (ok || candidatoActual >= precarga.numCandidatos) {
+            pasoLetra = LETRA_LISTA; terminado = true;
+          }
+        }
+
+        // Solo se publica el resultado si la canción sigue siendo la misma.
+        if (terminado && claveActual == claveLetra) {
+          if (!ok) precarga.estado = LETRA_NO_HAY;
+          CON_DATOS({ letras = precarga; precarga.limpiar();
+                      lineaPintada = -2; pedirRedibujado = true; });
+          Serial.printf("[Letra] %s (%d líneas) · RAM %lu B\n",
+                        ok ? "✅" : "❌ no encontrada", letras.n,
+                        (unsigned long)ESP.getFreeHeap());
+        }
+      }
+    }
+
+    // La precarga solo se lanza cuando NO hay una búsqueda en curso: si
+    // no, se encadenarían dos operaciones lentas seguidas.
+    if (!colaPedida && pasoLetra == LETRA_LISTA && sonando
+        && letras.estado != LETRA_NO_BUSCADA
         && progresoAhora() > 8000 && claveActual.length() && claveActual[0] != '_') {
       colaPedida = true;
       precargarSiguiente();
+      ultimaConsulta = 0;      // preguntar YA: la precarga bloqueó varios segundos
     }
     vTaskDelay(pdMS_TO_TICKS(50));
   }

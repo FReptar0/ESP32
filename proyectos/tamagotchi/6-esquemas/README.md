@@ -5,6 +5,7 @@ El proyecto mapeado de punta a punta, en dos planos.
 | Documento | Qué contiene | Estado |
 |---|---|---|
 | [arquitectura-end-to-end.md](arquitectura-end-to-end.md) | Plano lógico (flujo de datos), ciclo de vida del firmware, dependencias externas | 🟢 Listo |
+| [mapa-de-memoria.md](mapa-de-memoria.md) | Dónde vive cada cosa: flash contra RAM, pila contra montón, y cómo se manejan las letras | 🟢 Listo |
 | [conexiones-fisicas.md](conexiones-fisicas.md) | Plano físico: diagrama de conexiones, tabla de pines, consumo y orden de armado | 🟢 Listo — pendiente de armar |
 
 **Por qué Mermaid y no imágenes:** los diagramas son texto plano que se dibuja
