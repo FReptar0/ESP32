@@ -85,7 +85,7 @@ que el proyecto pueda terminarse:
 | S-01 | ~~Al menos una placa ESP32 funciona~~ | ✅ **Resuelto** — C-001 identificada y respondiendo | — |
 | S-02 | ~~La API de Spotify permite leer "reproduciendo ahora"~~ | ✅ **Resuelto** — sí, ver [investigación](../5-investigacion/spotify-api-2026.md) | — |
 | S-03 | ~~Hay una pantalla disponible~~ | ✅ **Resuelto** — 4× GMT130 240×240 en inventario | — |
-| S-04 | El ESP32 tiene RAM suficiente para HTTPS + JSON a la vez | 🔄 **Base medida: 303.5 KB libres.** Falta medir con TLS activo | 🎯 **Riesgo #1 actual.** Obligaría a reabrir el [ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md) y migrar al puente |
+| S-04 | ~~El ESP32 tiene RAM suficiente para HTTPS~~ | ✅ **Resuelto** — mínimo 199.4 KB con TLS activo, sin fugas ni fragmentación | — |
 | S-05 | Existe una fuente gratuita de letras sincronizadas para tu música | ❌ No | Solo RF-04. El resto sobrevive |
 | S-06 | ~~El WiFi de casa es 2.4 GHz~~ | ✅ **Resuelto** — el ESP32 ve `INFINITUMEB00` a −39 dBm, canal 11 | — |
 | S-07 | ~~La GMT130 es 3.3 V y ST7789~~ | ✅ **Resuelto** — confirmado en la placa | — |
@@ -105,8 +105,8 @@ que el proyecto pueda terminarse:
 | ~~Sin cuenta Premium la app no funciona~~ | — | — | ✅ Resuelto: plan Familiar como titular |
 | Superar el límite de peticiones (429) | Media | Bajo | Spotify no publica el número. Consultar cada 5 s y respetar siempre `Retry-After` |
 | El texto se ve nítido pero demasiado chico para leerlo a 60 cm | Media | Medio | 240 px en 1.3" = píxeles diminutos. Se resuelve con fuentes más grandes, sacrificando caracteres. Ver [ADR-0004](../1-decisiones/ADR-0004-pantalla-gmt130.md) |
-| **El ESP32 se queda sin memoria con TLS** | Media | Alto | 🎯 **Es ahora el riesgo #1.** Se mide en el paso 3 del [ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md). Si falla, se reabre ese ADR y se migra al puente |
-| Los certificados raíz TLS caducan | Baja | Alto | Único riesgo donde el aparato deja de funcionar solo, sin que nadie toque nada. Se decide en el futuro ADR-0009 |
+| ~~El ESP32 se queda sin memoria con TLS~~ | — | — | ✅ Medido 2026-08-29: 199.4 KB de margen, sin fugas |
+| **Los certificados raíz TLS caducan** | Baja | Alto | 🎯 **Riesgo #1 actual.** Único caso donde el aparato deja de funcionar solo, sin que nadie toque nada. Se decide en el futuro ADR-0009 |
 | El alcance crece y el proyecto no termina | **Alta** | Medio | La lista de "fuera de alcance" de arriba. Revisarla cada vez que aparezca una idea nueva |
 
 ---
@@ -116,6 +116,7 @@ que el proyecto pueda terminarse:
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
+| 2026-08-29 | S-04 resuelto — el punto de control del ADR-0002 pasó con 199.4 KB de margen | Spike de memoria con TLS contra el servidor real de Spotify. La arquitectura directa se confirma |
 | 2026-08-29 | S-06 resuelto; S-04 con línea base medida | Primer firmware cargado con éxito: 303.5 KB de RAM libre y red de 2.4 GHz confirmada a −39 dBm |
 | 2026-08-29 | S-02 resuelto (la API sirve); nuevo S-09 (Premium) como bloqueante | Investigación de la API de Spotify. El riesgo #1 se cierra y aparece un prerequisito de cuenta |
 | 2026-08-29 | S-01, S-07 y S-08 resueltos; S-06 en curso; riesgos de hardware cerrados | La placa fue identificada (ESP32-D0WD-V3) y la GMT130 confirmada. El bloqueante era cables USB-C de solo carga |

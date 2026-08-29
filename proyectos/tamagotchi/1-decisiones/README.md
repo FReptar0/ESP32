@@ -20,7 +20,7 @@ suficiente:
 |---|---|---|
 | ADR-0005 | Alimentación: ¿USB o batería? | Definir si el aparato se mueve de lugar o vive enchufado |
 | ADR-0006 | Cómo se guardan las credenciales de WiFi y Spotify | 🟢 Desbloqueado por el ADR-0002 |
-| ADR-0009 | Cómo se manejan los certificados raíz TLS (y su caducidad) | Llegar al paso 3 del ADR-0002 |
+| ADR-0009 | Cómo se manejan los certificados raíz TLS (y su caducidad) | 🎯 **Desbloqueado y ahora es el riesgo #1** |
 | ADR-0007 | Cómo se interactúa con el Tamagotchi (botones, encoder, touch) | Definir qué hace además de mostrar la canción |
 | ADR-0008 | Qué librería usar para la pantalla (`TFT_eSPI` vs `Adafruit_ST7789`) | Confirmar el controlador de la GMT130 |
 

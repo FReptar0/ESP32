@@ -11,38 +11,55 @@ mal"* de *"esto funcionaba y cambió"*.
 
 ## 🔴 Pendientes, en orden de urgencia
 
-### 1. ⚠️ ¿Tienes Spotify Premium?
+### 1. ¿Qué cobertura de letras hay para tu música?
 
-**Nuevo bloqueante, salido de la investigación de la API.** Spotify exige que
-*"el dueño de la app tenga una cuenta Premium para que las apps en modo
-desarrollo funcionen"*. Sin Premium no hay proyecto, y no hay forma de
-programarlo alrededor.
+Supuesto [S-05](../4-requerimientos/REQUERIMIENTOS.md#supuestos), ligado al
+[ADR-0003](../1-decisiones/ADR-0003-fuente-de-las-letras.md).
 
-Se responde en 5 segundos. Ver
-[`spotify-api-2026.md`](spotify-api-2026.md).
+Prueba barata que puedes hacer tú, sin programar: buscar en LRCLIB, desde el
+navegador, **5 canciones que de verdad escuches**. Si tres no aparecen, hay que
+replantear el RF-04 antes de invertirle tiempo.
 
-### 2. ¿Cuánta RAM libre queda en el ESP32 con TLS activo?
+### 2. ¿Cómo se validan los certificados raíz TLS? (futuro ADR-0009)
 
-Supuesto [S-04](../4-requerimientos/REQUERIMIENTOS.md#supuestos). Decide entre las
-dos arquitecturas del
-[ADR-0002](../1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md).
+El spike de memoria usó `setInsecure()`, que no verifica el certificado. El
+firmware final sí debe hacerlo. Hay que decidir entre incrustar el certificado
+raíz (que **caduca**, y el aparato dejaría de funcionar solo un día) o usar el
+paquete de certificados del ESP32.
 
-Requiere la placa funcionando. Es un **spike**: un programa desechable que se
-conecta por HTTPS a cualquier sitio e imprime la memoria libre. La respuesta se
-guarda; el código se tira.
-
-### 3. ¿Qué cobertura de letras hay para tu música?
-
-Supuesto [S-05](../4-requerimientos/REQUERIMIENTOS.md#supuestos), relacionado con
-el [ADR-0003](../1-decisiones/ADR-0003-fuente-de-las-letras.md).
-
-Prueba barata que puedes hacer tú mismo, sin programar nada: buscar en LRCLIB, a
-mano desde el navegador, **5 canciones que de verdad escuches**. Si tres no
-aparecen, hay que replantear el RF-04 antes de invertir tiempo en él.
+Es el único riesgo del proyecto donde algo que funcionaba se rompe sin que nadie
+lo toque.
 
 ---
 
 ## ✅ Hallazgos
+
+### 2026-08-29 — ✅ La memoria alcanza de sobra (resuelve S-04)
+
+**Qué se averiguó:** con TLS activo contra `accounts.spotify.com`, el mínimo
+histórico de RAM libre fue **204.168 B (199.4 KB)** — el doble del umbral de
+"sobra". TLS cuesta ~50 KB temporales. **Sin fugas** (la memoria se recupera
+íntegra al cerrar) y **sin fragmentación** (el bloque contiguo mayor no se movió
+de 110.580 B en ninguna medición).
+**Fuente:** prueba propia — ver [`spike-memoria-tls.md`](spike-memoria-tls.md).
+**Por qué importa:** era el riesgo #1 tras cerrar el S-02, y el punto de control
+del ADR-0002. De haber salido mal, habría obligado a rediseñar la arquitectura.
+**Confianza:** máxima (medición directa contra el servidor real).
+**Consecuencia:** S-04 resuelto ✅ · el ADR-0002 se confirma, no se reabre ·
+queda pendiente el ADR-0009 sobre certificados.
+
+### 2026-08-29 — ⚠️ Spotify ya no acepta `localhost` como Redirect URI
+
+**Qué se averiguó:** hay que usar la IP explícita: `http://127.0.0.1:8888/callback`.
+La documentación dice literalmente *"localhost is not allowed as redirect URI"*.
+HTTP sin S solo se permite para direcciones de loopback como esta.
+**Fuente:** [documentación oficial de Redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
+**Por qué importa:** se empezó a aplicar el **9 de abril de 2025**, así que
+**todos los tutoriales anteriores a esa fecha dicen `localhost` y fallan**. Es el
+ejemplo perfecto de por qué esta carpeta anota fechas.
+**Confianza:** máxima (fuente primaria).
+**Consecuencia:** valor fijado para el paso 4 (OAuth).
+
 
 ### 2026-08-29 — RAM base del ESP32: 303.5 KB libres
 

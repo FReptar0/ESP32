@@ -17,45 +17,46 @@ Un aparatito de escritorio con ESP32 que muestra qué estás escuchando en Spoti
 
 ```mermaid
 graph LR
-    A["1 · Blink +<br/>info del chip"] --> B["2 · Conectar<br/>a WiFi"]
+    A["1 · Blink +<br/>info chip"] --> B["2 · WiFi"]
     B --> C["3 · HTTPS +<br/>medir RAM"]
     C --> D["4 · OAuth<br/>una vez"]
     D --> E["5 · Renovar<br/>token solo"]
     E --> F["6 · Leer la<br/>canción"]
-    F --> G["7 · Dibujarla<br/>en pantalla"]
+    F --> G["7 · Dibujar en<br/>pantalla"]
     G --> H["8 · Letras<br/>sincronizadas"]
 
     style A fill:#2d4a2d,color:#fff
-    style B fill:#5a4a2d,color:#fff
+    style B fill:#2d4a2d,color:#fff
+    style C fill:#2d4a2d,color:#fff
+    style D fill:#5a4a2d,color:#fff
 ```
 
-✅ **Paso 1 hecho.** La cadena completa funciona: editar → compilar → cargar →
-ejecutar → leer.
+✅ **Pasos 1, 2 y 3 hechos.** El punto de control del proyecto quedó superado.
 
 ```
-Chip:      ESP32-D0WD-V3, 2 núcleos @ 240 MHz, 4 MB flash
-RAM libre: 303.5 KB          ← la línea base a vigilar
-Red:       INFINITUMEB00, canal 11, −39 dBm (excelente)
+Chip:     ESP32-D0WD-V3, 2 núcleos @ 240 MHz, 4 MB flash
+WiFi:     192.168.1.96 · −45 dBm · conecta en < 1 s
+TLS:      handshake en 1.088 ms contra accounts.spotify.com
+RAM:      mínimo 199.4 KB con TLS activo (umbral: 100 KB)
+          sin fugas · sin fragmentación
 ```
 
-### 🔜 Siguiente: paso 2 — conectar a WiFi
+### 🔜 Siguiente: paso 4 — OAuth
 
-Solo falta la contraseña de la red, y **no hace falta que la escribas en el chat**:
+Crear la app en <https://developer.spotify.com/dashboard> y hacer el baile de
+autorización una vez desde la Mac, para obtener el `refresh_token`.
 
-```bash
-cd proyectos/tamagotchi/firmware
-cp include/secrets.h.ejemplo include/secrets.h
-# abre include/secrets.h y rellena WIFI_PASSWORD
-```
+> ⚠️ **Redirect URI: `http://127.0.0.1:8888/callback`**
+> `localhost` **no** se acepta desde abril de 2025. Los tutoriales viejos fallan.
 
-`secrets.h` está bloqueado por `.gitignore`, así que nunca se sube al repositorio
-(RNF-05). La plantilla `.ejemplo` sí se sube: guarda la *estructura* de lo que
-hace falta, nunca los valores.
+### 🎯 Riesgo #1 actual: los certificados raíz TLS
 
-**El paso 3 es el importante:** medir cuánta RAM queda con TLS activo. Es el punto
-de control del [ADR-0002](1-decisiones/ADR-0002-como-obtener-datos-de-spotify.md)
-y el riesgo #1 del proyecto. Si el número no alcanza, hay que replantear la
-arquitectura — y por eso se mide **antes** de escribir la lógica de Spotify.
+El spike de memoria usó `setInsecure()` (no valida el certificado del servidor).
+Válido para medir, no para el firmware final. Hay que decidir cómo validarlos —
+futuro **ADR-0009**.
+
+Es el único riesgo del proyecto donde el aparato **deja de funcionar solo, un
+día, sin que nadie haya tocado nada**.
 
 ## Cómo está organizado
 
@@ -65,12 +66,12 @@ Las carpetas siguen las 6 fases de la
 | Carpeta | Qué contiene | Estado |
 |---|---|---|
 | [`1-decisiones/`](1-decisiones/) | ADRs: por qué hicimos lo que hicimos | 🟢 4 escritos · solo el 0003 sigue abierto |
-| [`2-entorno/`](2-entorno/) | El entorno aislado y cómo levantarlo | 🟢 PlatformIO 6.1.19 + esptool 5.3.1 instalados |
+| [`2-entorno/`](2-entorno/) | El entorno aislado y cómo levantarlo | 🟢 Funcionando · recompila en ~28 s |
 | [`3-componentes/`](3-componentes/) | Ficha de cada pieza | 🟢 ESP32 y GMT130 confirmados |
 | [`4-requerimientos/`](4-requerimientos/) | Qué tiene que hacer el aparato | 🟢 Borrador listo |
 | [`5-investigacion/`](5-investigacion/) | Lo que hubo que averiguar, con fuentes | 🟢 API de Spotify verificada |
 | [`6-esquemas/`](6-esquemas/) | El mapa: lógico y físico | 🟢 Los dos listos |
-| `firmware/` | El código | 🟢 Prueba de vida corriendo en la placa |
+| `firmware/` | El código | 🟢 WiFi + HTTPS funcionando |
 | [`BITACORA.md`](BITACORA.md) | Qué pasó en cada sesión | 🟢 Al día |
 
 ---

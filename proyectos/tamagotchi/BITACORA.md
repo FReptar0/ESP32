@@ -185,15 +185,59 @@ motivo: el objetivo del proyecto es aprender IoT, y la capa que yo proponía mov
 a la Mac —WiFi, TLS, OAuth, JSON con memoria contada— es justamente lo que hay
 que aprender.
 
+### ✅ Pasos 2 y 3 completados
+
+**Paso 2 — WiFi:** conectó al primer intento, en menos de un segundo.
+IP `192.168.1.96`, puerta de enlace `192.168.1.254`, señal **−45 dBm**.
+
+**Paso 3 — el punto de control del proyecto:** conexión HTTPS real contra
+`accounts.spotify.com:443`, midiendo la memoria en cada etapa.
+
+```
+Antes de nada        251.6 KB libres   bloque mayor 110.580 B
+Objeto TLS creado    249.1 KB          bloque mayor 110.580 B
+🔑 TLS conectado     208.8 KB          bloque mayor 110.580 B
+Respuesta leída      247.8 KB          bloque mayor 110.580 B
+Tras cerrar          250.1 KB          bloque mayor 110.580 B
+
+MÍNIMO HISTÓRICO:    199.4 KB   (umbral de "sobra": 100 KB)
+```
+
+Handshake TLS en 1.088 ms. Respuesta `HTTP/1.1 307` — esperada, la raíz de
+`accounts.spotify.com` redirige; lo que importa es que **hubo respuesta**.
+
+**Tres cosas buenas, no una:**
+
+1. **199.4 KB de mínimo** — el doble del umbral. TLS cuesta ~50 KB temporales.
+2. **Sin fugas** — la memoria vuelve íntegra al cerrar (1.520 B de diferencia, que
+   es ruido). Crítico: el aparato va a abrir ~17.000 conexiones al día. Una fuga
+   de 2 KB por conexión lo mataría en minutos, y de madrugada, cuando nadie mira.
+3. **Sin fragmentación** — el bloque contiguo mayor no se movió de 110.580 B en
+   ninguna de las cinco mediciones. Tener 200 KB libres no garantiza poder
+   reservar 50 KB de golpe si están partidos en pedacitos; aquí no lo están.
+
+**El ADR-0002 queda confirmado.** No hay que reabrirlo.
+
+Detalle completo en [`5-investigacion/spike-memoria-tls.md`](5-investigacion/spike-memoria-tls.md).
+
+### ⚠️ Hallazgo sobre el Redirect URI de Spotify
+
+`localhost` **ya no se acepta**. Hay que usar la IP explícita:
+`http://127.0.0.1:8888/callback`.
+
+Se empezó a aplicar el **9 de abril de 2025**, así que todos los tutoriales
+anteriores a esa fecha están mal. Buen ejemplo de por qué la fase 5 anota fechas.
+
 ### 🔜 En qué me quedé — siguiente sesión
 
-**Paso 2: conectar a WiFi.** Bloqueado solo por la contraseña de la red. Ya está
-la plantilla `firmware/include/secrets.h.ejemplo`: se copia a `secrets.h` (que
-está en `.gitignore`) y se rellena. La contraseña nunca pasa por el chat ni por
-Git.
+**Paso 4 — OAuth.** Falta terminar de crear la app en el dashboard de Spotify
+(con ese Redirect URI) y hacer el baile de autorización una vez desde la Mac,
+para obtener el `refresh_token`.
 
-**Paso 3: medir la RAM con TLS activo.** Es el punto de control del ADR-0002 y el
-riesgo #1 actual. Si el número no alcanza, hay que reabrir ese ADR.
+**Riesgo #1 actual: los certificados raíz TLS** (futuro ADR-0009). El spike usó
+`setInsecure()`, que no valida el certificado — válido para medir memoria, no
+para el firmware final. Es el único riesgo donde el aparato deja de funcionar
+solo, un día, sin que nadie haya tocado nada.
 
 **En paralelo, sin depender de nada:** armar el cableado de la pantalla siguiendo
 [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md).

@@ -135,27 +135,41 @@ cada paso se verifica antes de pasar al siguiente:
 
 ```mermaid
 graph TD
-    A["1 · Blink + info del chip<br/>✅ hecho"] --> B["2 · Conectar a WiFi<br/>imprimir la IP"]
-    B --> C["3 · HTTPS a un sitio cualquiera<br/>📊 medir RAM libre"]
+    A["1 · Blink + info del chip<br/>✅ hecho"] --> B["2 · Conectar a WiFi<br/>✅ hecho"]
+    B --> C["3 · HTTPS + medir RAM<br/>✅ hecho: 199.4 KB"]
     C --> D{"¿Sobra memoria?"}
-    D -->|"Sí"| E["4 · OAuth desde la Mac<br/>obtener refresh_token"]
-    D -->|"No"| X["⚠️ Reabrir este ADR<br/>y considerar el puente"]
+    D -->|"✅ Sí, de sobra"| E["4 · OAuth desde la Mac<br/>obtener refresh_token"]
+    D -->|"No"| X["⚠️ Reabrir este ADR<br/>(no hizo falta)"]
     E --> F["5 · ESP32 renueva su token solo"]
     F --> G["6 · Leer y parsear la canción"]
     G --> H["7 · Dibujarla en la GMT130"]
 
     style A fill:#2d4a2d,color:#fff
-    style D fill:#5a4a2d,color:#fff
-    style X fill:#5a2d2d,color:#fff
+    style B fill:#2d4a2d,color:#fff
+    style C fill:#2d4a2d,color:#fff
+    style D fill:#2d4a2d,color:#fff
+    style E fill:#5a4a2d,color:#fff
+    style X fill:#3a3a3a,color:#888
 ```
 
 **El paso 3 es el punto de control.** Ahí se mide cuánta RAM queda con TLS activo
-(supuesto S-04), y es un *spike*: código desechable cuyo único producto es un
-número anotado en la fase 5.
+(supuesto S-04).
 
-Si ese número resulta demasiado bajo, no es un fracaso — es la señal de que había
-que reabrir este ADR. Por eso está dibujado el camino de salida: **la decisión
-lleva su propia condición de reversa escrita.**
+> ## ✅ Punto de control superado — 2026-08-29
+>
+> Mínimo histórico de RAM libre con TLS activo contra el servidor real de
+> Spotify: **199.4 KB**. El umbral de "sobra" eran 100 KB.
+>
+> Además: **sin fugas de memoria** (se recupera íntegra al cerrar) y **sin
+> fragmentación** (el bloque contiguo mayor no se movió). Medición completa en
+> [`5-investigacion/spike-memoria-tls.md`](../5-investigacion/spike-memoria-tls.md).
+>
+> **Esta decisión queda confirmada. No hay que reabrirla.**
+
+El camino de salida se dibujó de todos modos, y esa es la parte que importa de
+este ADR: **la decisión llevaba escrita su propia condición de reversa** antes de
+saber el resultado. Si el número hubiera salido mal, no habría hecho falta
+discutir nada — ya estaba acordado qué hacer.
 
 ## Consecuencias
 
@@ -178,7 +192,7 @@ lleva su propia condición de reversa escrita.**
 
 **Lo que hay que vigilar:**
 
-- 📊 **La RAM libre.** Es el número a seguir en todo el proyecto. Por eso el
+- ✅ ~~La RAM libre~~ — medida el 2026-08-29: 199.4 KB de margen. Por eso el
   firmware de prueba ya lo imprime desde el primer día.
 - 🔐 **Que el `refresh_token` no acabe en Git.** El `.gitignore` ya bloquea
   `secrets.h` y `credentials.h` (RNF-05).
