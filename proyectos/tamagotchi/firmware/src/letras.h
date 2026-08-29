@@ -16,6 +16,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include "texto.h"
 
 // Memoria RESERVADA DE UNA VEZ, no pedida y devuelta constantemente.
 // En un aparato que va a estar encendido días, pedir y liberar memoria
@@ -160,15 +161,24 @@ inline void Letras::parsearLRC(const char* lrc) {
         while (*ini == ' ') ini++;
         const char* fin = strchr(ini, '\n');
         size_t len = fin ? (size_t)(fin - ini) : strlen(ini);
-        if (len >= MAX_TEXTO) len = MAX_TEXTO - 1;
 
         // Las líneas vacías del LRC son silencios entre estrofas.
         // Se conservan: dejan la pantalla en blanco cuando nadie canta,
         // que es justo lo correcto.
-        memcpy(lineas[n].texto, ini, len);
-        lineas[n].texto[len] = 0;
-        // quitar el retorno de carro que dejan algunos servidores
-        if (len && lineas[n].texto[len-1] == '\r') lineas[n].texto[len-1] = 0;
+        String bruto;
+        bruto.reserve(len + 1);
+        for (size_t k = 0; k < len; k++) bruto += ini[k];
+        bruto.trim();
+
+        // Los acentos se convierten AQUÍ, una sola vez al cargar la
+        // letra, y no cada vez que se dibuja. Las fuentes integradas de
+        // TFT_eSPI solo tienen ASCII 32-127 y descartan lo demás en
+        // silencio: sin esto, "corazón" se vería "corazn".
+        String limpio = aASCII(bruto);
+        size_t l2 = limpio.length();
+        if (l2 >= MAX_TEXTO) l2 = MAX_TEXTO - 1;
+        memcpy(lineas[n].texto, limpio.c_str(), l2);
+        lineas[n].texto[l2] = 0;
         lineas[n].ms = ms;
         n++;
       }

@@ -30,6 +30,41 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — Cuatro problemas al ver el aparato funcionando
+
+**Qué se encontró y arregló:**
+
+1. **Los acentos no se dibujaban** (`León` → `Len`). Las fuentes integradas de
+   TFT_eSPI solo tienen ASCII 32–127 y **descartan el resto en silencio**. La
+   búsqueda en LRCLIB sí funcionaba con acentos: el fallo era solo al dibujar.
+2. **🐛 Bug propio:** se añadía `...` a frases que sí cabían. Un `break` salía
+   del bucle sin vaciar la variable que se comprobaba después.
+3. **Recortar es peor que encoger.** Ahora prueba 3 renglones en fuente 4, luego
+   fuente 2, y solo entonces recorta.
+4. **💥 Desbordamiento de pila** al precargar: un objeto de 6.8 KB como variable
+   local, con la pila de Arduino en 8 KB. Había 186 KB libres, pero **de heap,
+   que es otro sitio**.
+
+**Fuente:** propio — detalle en [`limitaciones-de-pantalla.md`](limitaciones-de-pantalla.md).
+**Confianza:** máxima (todos reproducidos y arreglados).
+
+🔑 **Tres lecciones:** los acentos no existen en las fuentes integradas · un
+`break` a media función se salta lo que el resto del código da por hecho ·
+`ESP.getFreeHeap()` **no dice nada sobre la pila**.
+
+### 2026-08-29 — Precarga: la letra aparece al instante al cambiar de canción
+
+**Qué se hizo:** el ESP32 pregunta a Spotify qué canción viene después
+(`/me/player/queue`) y **descarga esa letra por adelantado**. Además sondea cada
+1 s en los últimos 15 segundos de la canción, en vez de cada 5 s.
+**Fuente:** propio — ver [`precarga-de-letras.md`](precarga-de-letras.md).
+**Por qué importa:** antes hacían falta dos viajes por internet al cambiar de
+canción. Ahora es una copia en memoria.
+**Confianza:** máxima (verificado: `[Letra] ⚡ desde precarga`).
+**Consecuencia:** usa `user-read-playback-state`, que se había pedido en el
+[ADR-0010](../1-decisiones/ADR-0010-permisos-de-spotify.md) sin saber para qué.
+
+
 ### 2026-08-29 — `Transfer-Encoding: chunked` rompía la lectura de LRCLIB
 
 **Qué se averiguó:** LRCLIB devolvía HTTP 200 y el firmware decía "no

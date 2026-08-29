@@ -381,9 +381,70 @@ es la de deshabilitar interrupciones.
 Detalle en [`5-investigacion/chunked-encoding.md`](5-investigacion/chunked-encoding.md)
 y [`macros-de-arduino.md`](5-investigacion/macros-de-arduino.md).
 
+### 🔧 Cuatro arreglos tras ver el aparato funcionando
+
+**1. Los acentos.** `León` se veía `Len`. Las fuentes integradas de TFT_eSPI solo
+tienen ASCII 32–127 y descartan el resto **en silencio** — está en su código:
+`if ((font>1) && (font<9) && ((uniCode<32)||(uniCode>127))) return 0;`. Y como la
+`ó` ocupa dos bytes en UTF-8, desaparecía entera.
+
+Ahora se convierten a su letra más parecida (`León` → `Leon`) **al cargar la
+letra**, no al dibujarla: una vez por canción en vez de 6 veces por segundo.
+Se pierde la tilde; la alternativa real serían las fuentes *smooth* `.vlw`.
+
+Curioso: la búsqueda en LRCLIB **sí funcionaba** con acentos (`Zoé`, `México`).
+El fallo era solo al dibujar, lo que despistaba.
+
+**2. 🐛 El `...` en frases que sí cabían.** Bug propio, de una línea: el `break`
+salía del bucle **sin vaciar `resto`**, y la comprobación de después lo tomaba
+por texto sobrante. 🔑 Un `break` a media función se salta lo que el resto del
+código da por hecho.
+
+**3. Recortar es peor que encoger.** Ahora hay tres escalones: fuente 4 en hasta
+3 renglones → fuente 2 → y solo entonces `...`. Perder palabras de la canción es
+peor que perder tamaño de letra.
+
+**4. 💥 Desbordamiento de pila.** `Stack canary watchpoint triggered (loopTask)`.
+Un `Letras tmp;` local pesa **6.840 bytes** y la pila de Arduino son **8.192**.
+Lo desconcertante: había **186 KB libres** — pero de *heap*, que es otro sitio.
+🔑 `ESP.getFreeHeap()` no dice nada sobre la pila.
+
+El "canario" es un centinela al final de la pila: si aparece pisado, el sistema
+reinicia **a propósito** en vez de seguir con memoria corrupta. El reinicio era
+la parte buena.
+
+### ⚡ Precarga de la siguiente canción
+
+```
+[Precarga] siguiente: Price I'll Pay — Thee Sacred Souls
+[Precarga] lista (41 líneas)
+🎵 Price I'll Pay — Thee Sacred Souls
+[Letra] ⚡ desde precarga (41 líneas)      <- cero espera
+```
+
+Dos mejoras combinadas:
+
+- **Sondeo adaptativo:** cada 5 s normalmente, **cada 1 s en los últimos 15
+  segundos** de la canción. El ESP32 sabe la duración y el progreso, así que
+  puede predecir el final.
+- **Precarga:** a los 8 s de empezar una canción, pregunta a Spotify qué sigue
+  (`/me/player/queue`) y descarga esa letra por adelantado.
+
+Usa `user-read-playback-state`, pedido en el ADR-0010 sin saber para qué. Pedir
+todos los permisos de una vez resultó buena idea.
+
+**Latencia:** se compensa la mitad del viaje de red (`instanteBase = millis() -
+viaje/2`) más un ajuste manual `AJUSTE_LETRA_MS = 400`, para afinar mirando.
+
+Detalle en [`5-investigacion/limitaciones-de-pantalla.md`](5-investigacion/limitaciones-de-pantalla.md)
+y [`precarga-de-letras.md`](5-investigacion/precarga-de-letras.md).
+
 ### 🔜 En qué me quedé — siguiente sesión
 
 **Verificaciones pendientes de mirar:**
+- **¿El ajuste de 400 ms dejó la letra sincronizada?** Se afina en una constante
+- ⚠️ La RAM bajó de 186 a 180 KB en tres canciones. Puede ser el calentamiento
+  del heap ya medido (que se aplana) o algo que no se libera. Medir con calma
 - **La letra: ¿va sincronizada con lo que se canta?** Es lo único que no puedo
   comprobar yo
 - ¿Qué pasa con una canción sin letra en LRCLIB? Debe decir "sin letra" y seguir

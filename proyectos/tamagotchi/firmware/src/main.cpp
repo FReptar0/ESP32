@@ -15,18 +15,29 @@
 #include <TFT_eSPI.h>
 #include "mbedtls/base64.h"
 #include "secrets.h"
+#include "texto.h"
 #include "letras.h"
 
 extern const uint8_t rootca_crt_bundle_start[] asm("_binary_data_cert_x509_crt_bundle_bin_start");
 
 TFT_eSPI tft = TFT_eSPI();
-Letras letras;
+
+Letras letras;      // la letra que se está mostrando
+Letras precarga;    // la de la SIGUIENTE canción, ya descargada
+String clavePrecarga;
 
 const char* URL_TOKEN   = "https://accounts.spotify.com/api/token";
 const char* URL_CANCION = "https://api.spotify.com/v1/me/player/currently-playing";
+const char* URL_COLA    = "https://api.spotify.com/v1/me/player/queue";
 
-const unsigned long CADA_CUANTO_MS  = 5000;   // preguntar a Spotify
-const unsigned long REFRESCO_MS     = 150;    // repintar la letra
+const unsigned long CADA_CUANTO_MS  = 5000;   // preguntar a Spotify, normal
+const unsigned long CERCA_DEL_FIN_MS = 1000;  // ...y más seguido al final de la canción
+const unsigned long UMBRAL_FIN_MS   = 15000;  // "final" = últimos 15 s
+const unsigned long REFRESCO_MS     = 100;    // repintar la letra
+
+// Ajuste fino del sincronismo de la letra. Positivo = la letra va por
+// delante. Si la ves atrasada, súbelo; si adelantada, bájalo.
+const long AJUSTE_LETRA_MS = 400;
 
 const int CANAL_PWM = 0;
 const int BRILLO    = 140;                    // 0-255 (RNF-02)
@@ -39,8 +50,8 @@ const uint16_t GRIS_LINEA    = 0x2104;
 
 // --- Distribución de la pantalla (240x240) ---
 const int MARGEN = 8, ANCHO = 240 - 16;
-const int Y_TITULO = 32, Y_ARTISTA = 52;
-const int Y_LETRA = 80, ALTO_LETRA = 100;
+const int Y_TITULO = 30, Y_ARTISTA = 50;
+const int Y_LETRA = 76, ALTO_LETRA = 114;
 const int Y_BARRA = 196, Y_TIEMPOS = 214;
 
 String accessToken;
@@ -54,6 +65,7 @@ String claveActual;
 long  progresoBase = 0, duracionMs = 0;
 unsigned long instanteBase = 0;
 bool  sonando = false;
+bool  colaPedida = false;
 
 int  lineaPintada = -2;
 unsigned long ultimaConsulta = 0, ultimoRefresco = 0;
@@ -61,7 +73,8 @@ String estadoPintado;
 
 long progresoAhora() {
   if (!sonando) return progresoBase;
-  long p = progresoBase + (long)(millis() - instanteBase);
+  long p = progresoBase + (long)(millis() - instanteBase) + AJUSTE_LETRA_MS;
+  if (p < 0) p = 0;
   return (duracionMs > 0 && p > duracionMs) ? duracionMs : p;
 }
 
@@ -69,24 +82,55 @@ long progresoAhora() {
 //  Dibujo
 // ============================================================
 
+// Parte un texto en líneas que quepan a lo ancho, cortando por PALABRAS.
+// Devuelve cuántas líneas usó; si `cupoTodo` no es nulo, dice si el texto
+// entró completo o hubo que recortarlo.
 int partirEnLineas(const String& texto, int fuente, int anchoMax,
-                   String salida[], int maxLineas) {
-  int n = 0; String resto = texto;
+                   String salida[], int maxLineas, bool* cupoTodo = nullptr) {
+  int n = 0;
+  String resto = texto;
+  resto.trim();
+
   while (resto.length() > 0 && n < maxLineas) {
-    if (tft.textWidth(resto, fuente) <= anchoMax) { salida[n++] = resto; break; }
+    if (tft.textWidth(resto, fuente) <= anchoMax) {
+      salida[n++] = resto;
+      resto = "";          // 🐛 ESTO FALTABA.
+      break;               // Sin limpiar `resto`, la comprobación de más
+    }                      // abajo creía que había sobrado texto y añadía
+                           // "..." a frases que SÍ cabían completas.
     int corte = resto.length();
     while (corte > 0 && tft.textWidth(resto.substring(0, corte), fuente) > anchoMax) corte--;
     int esp = resto.lastIndexOf(' ', corte);
-    if (esp > 0) corte = esp;                 // cortar por palabra, no a media palabra
+    if (esp > 0) corte = esp;              // cortar por palabra, no a media palabra
+    if (corte <= 0) corte = 1;             // palabra larguísima: cortar donde sea
     salida[n++] = resto.substring(0, corte);
-    resto = resto.substring(corte); resto.trim();
+    resto = resto.substring(corte);
+    resto.trim();
   }
-  if (resto.length() > 0 && n > 0) {
-    String u = salida[n-1];
-    while (u.length() > 1 && tft.textWidth(u + "...", fuente) > anchoMax)
-      u = u.substring(0, u.length() - 1);
-    salida[n-1] = u + "...";
-  }
+
+  if (cupoTodo) *cupoTodo = (resto.length() == 0);
+  return n;
+}
+
+// Como el anterior, pero si el texto no cabe con la fuente pedida, prueba
+// con la más chica antes de rendirse. Recortar con "..." pierde palabras
+// de la canción; encoger la letra no pierde nada.
+int partirConReserva(const String& texto, int anchoMax, String salida[],
+                     int maxLineas, int& fuenteUsada) {
+  bool cupo = false;
+  fuenteUsada = 4;
+  int n = partirEnLineas(texto, 4, anchoMax, salida, maxLineas, &cupo);
+  if (cupo) return n;
+
+  fuenteUsada = 2;                       // segunda oportunidad, más chica
+  n = partirEnLineas(texto, 2, anchoMax, salida, maxLineas + 1, &cupo);
+  if (cupo) return n;
+
+  // Ya no hay más remedio: recortar la última línea e indicarlo.
+  String u = salida[n-1];
+  while (u.length() > 1 && tft.textWidth(u + "...", 2) > anchoMax)
+    u = u.substring(0, u.length() - 1);
+  salida[n-1] = u + "...";
   return n;
 }
 
@@ -103,14 +147,15 @@ void barraEstado(const String& txt, uint16_t color) {
 void cabecera(const char* titulo, const char* artista) {
   tft.fillRect(0, 30, 240, 46, TFT_BLACK);
   tft.setTextDatum(TC_DATUM);
-  String l[1];
-  partirEnLineas(String(titulo), 2, ANCHO, l, 1);
+  // aASCII: sin esto, "León" se vería "Len" (ver texto.h)
+  String l[2]; int f;
+  partirConReserva(aASCII(String(titulo)), ANCHO, l, 1, f);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.drawString(l[0], 120, Y_TITULO, 2);
-  partirEnLineas(String(artista), 2, ANCHO, l, 1);
+  partirConReserva(aASCII(String(artista)), ANCHO, l, 1, f);
   tft.setTextColor(VERDE_SPOTIFY, TFT_BLACK);
   tft.drawString(l[0], 120, Y_ARTISTA, 2);
-  tft.drawFastHLine(MARGEN, 74, ANCHO, GRIS_LINEA);
+  tft.drawFastHLine(MARGEN, 70, ANCHO, GRIS_LINEA);
 }
 
 // Pinta la zona de la letra: la línea que toca, grande y blanca, con la
@@ -122,37 +167,49 @@ void zonaLetra(int idx) {
 
   if (letras.estado == LETRA_INSTRUMENTAL) {
     tft.setTextColor(GRIS, TFT_BLACK);
-    tft.drawString("~ instrumental ~", 120, Y_LETRA + 40, 4);
+    tft.drawString("~ instrumental ~", 120, Y_LETRA + 45, 4);
     return;
   }
   if (letras.estado != LETRA_OK) {
     tft.setTextColor(GRIS_OSCURO, TFT_BLACK);
     tft.drawString(letras.estado == LETRA_NO_HAY ? "sin letra" : "buscando letra...",
-                   120, Y_LETRA + 42, 2);
+                   120, Y_LETRA + 48, 2);
+    return;
+  }
+  if (idx < 0 || !letras.lineas[idx].texto[0]) {
+    // Silencio entre estrofas: la pantalla se queda limpia, que es lo
+    // correcto — no hay nada que cantar en este momento.
     return;
   }
 
-  // anterior, en gris muy tenue
-  if (idx > 0 && letras.lineas[idx-1].texto[0]) {
-    String a[1]; partirEnLineas(String(letras.lineas[idx-1].texto), 2, ANCHO, a, 1);
+  // Hasta 3 renglones, y si aun así no cabe se encoge la fuente antes de
+  // recortar. Perder palabras de la canción es peor que perder tamaño.
+  String c[4]; int fuente = 4;
+  int n = partirConReserva(String(letras.lineas[idx].texto), ANCHO, c, 3, fuente);
+
+  int alto = (fuente == 4) ? 27 : 19;
+  int bloque = n * alto;
+  int y = Y_LETRA + (ALTO_LETRA - bloque) / 2;
+
+  // El contexto (línea anterior y siguiente) solo se dibuja si sobra
+  // sitio. Cuando la frase actual es larga, ella manda.
+  bool hayHueco = (bloque + 42) <= ALTO_LETRA;
+
+  if (hayHueco && idx > 0 && letras.lineas[idx-1].texto[0]) {
+    String a[2]; int fa;
+    partirConReserva(String(letras.lineas[idx-1].texto), ANCHO, a, 1, fa);
     tft.setTextColor(GRIS_OSCURO, TFT_BLACK);
-    tft.drawString(a[0], 120, Y_LETRA + 2, 2);
+    tft.drawString(a[0], 120, Y_LETRA, 2);
   }
 
-  // la línea actual: fuente 4, blanca, hasta 2 renglones
-  if (idx >= 0 && letras.lineas[idx].texto[0]) {
-    String c[2];
-    int n = partirEnLineas(String(letras.lineas[idx].texto), 4, ANCHO, c, 2);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    int y = Y_LETRA + (n == 1 ? 32 : 22);
-    for (int i = 0; i < n; i++) tft.drawString(c[i], 120, y + i * 27, 4);
-  }
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  for (int i = 0; i < n; i++) tft.drawString(c[i], 120, y + i * alto, fuente);
 
-  // siguiente, en gris
-  if (idx + 1 < letras.n && letras.lineas[idx+1].texto[0]) {
-    String s[1]; partirEnLineas(String(letras.lineas[idx+1].texto), 2, ANCHO, s, 1);
+  if (hayHueco && idx + 1 < letras.n && letras.lineas[idx+1].texto[0]) {
+    String sg[2]; int fs;
+    partirConReserva(String(letras.lineas[idx+1].texto), ANCHO, sg, 1, fs);
     tft.setTextColor(GRIS, TFT_BLACK);
-    tft.drawString(s[0], 120, Y_LETRA + ALTO_LETRA - 18, 2);
+    tft.drawString(sg[0], 120, Y_LETRA + ALTO_LETRA - 18, 2);
   }
 }
 
@@ -207,12 +264,93 @@ bool renovarToken() {
   return true;
 }
 
+// ============================================================
+//  Precarga: descargar la letra de la SIGUIENTE canción
+// ============================================================
+//  Sin esto, al cambiar de canción hay que ir a Spotify Y a LRCLIB
+//  antes de poder mostrar nada: dos viajes por internet, y la letra
+//  llega tarde aunque la canción ya haya cambiado.
+//
+//  Spotify sabe qué viene después (/me/player/queue). Así que en
+//  cuanto la canción actual está estable, se descarga la letra de la
+//  siguiente y se guarda aparte. Cuando llegue el cambio, ya está
+//  lista: cero espera.
+//
+//  Usa el permiso user-read-playback-state, que ya se pidió en el
+//  ADR-0010 pensando justo en cosas como esta.
+void precargarSiguiente() {
+  WiFiClientSecure cli; cli.setCACertBundle(rootca_crt_bundle_start);
+  HTTPClient https;
+  if (!https.begin(cli, URL_COLA)) return;
+  https.addHeader("Authorization", "Bearer " + accessToken);
+  int cod = https.GET();
+  if (cod != 200) { https.end(); Serial.printf("[Cola] HTTP %d\n", cod); return; }
+
+  // La cola trae hasta 20 canciones con todos sus datos: son decenas de
+  // KB. El filtro se queda solo con la PRIMERA y sus cuatro campos.
+  JsonDocument filtro;
+  filtro["queue"][0]["name"] = true;
+  filtro["queue"][0]["duration_ms"] = true;
+  filtro["queue"][0]["album"]["name"] = true;
+  filtro["queue"][0]["artists"][0]["name"] = true;
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, https.getStream(),
+                                             DeserializationOption::Filter(filtro));
+  https.end();
+  if (err) { Serial.printf("[Cola] JSON: %s\n", err.c_str()); return; }
+
+  JsonObject sig = doc["queue"][0];
+  if (sig.isNull()) return;
+
+  const char* t = sig["name"] | "";
+  const char* a = sig["artists"][0]["name"] | "";
+  const char* al = sig["album"]["name"] | "";
+  long dur = sig["duration_ms"] | 0;
+  if (!*t) return;
+
+  String clave = String(t) + "|" + String(a);
+  if (clave == clavePrecarga) return;      // ya la teníamos
+
+  Serial.printf("[Precarga] siguiente: %s — %s\n", t, a);
+
+  // ⚠️ Aquí había un `Letras tmp;` como variable local, y reventaba la
+  //    placa con "Stack canary watchpoint triggered".
+  //
+  //    Un objeto Letras pesa ~6.8 KB (90 líneas x 76 bytes). Las
+  //    variables locales viven en la PILA, y la pila de la tarea
+  //    principal de Arduino son solo 8 KB — aunque queden 186 KB de
+  //    memoria libre, que es de otro sitio (el "montón" o heap).
+  //
+  //    El "canario" es un valor centinela que el sistema pone al final
+  //    de la pila. Si aparece pisado, sabe que hubo desbordamiento y
+  //    reinicia a propósito, en vez de seguir con la memoria corrupta.
+  //
+  //    La solución no es agrandar la pila: es no poner 7 KB en ella.
+  //    `precarga` es una variable global, así que vive fuera de la pila.
+  precarga.limpiar();
+  if (!precarga.buscar(rootca_crt_bundle_start, t, a, al, dur)) {
+    precarga.limpiar();
+    precarga.estado = LETRA_NO_HAY;
+  }
+  clavePrecarga = clave;
+  Serial.printf("[Precarga] lista (%d líneas) · RAM %lu B\n",
+                precarga.n, (unsigned long)ESP.getFreeHeap());
+}
+
 void consultar() {
   WiFiClientSecure cli; cli.setCACertBundle(rootca_crt_bundle_start);
   HTTPClient https;
   if (!https.begin(cli, URL_CANCION)) return;
   https.addHeader("Authorization", "Bearer " + accessToken);
+
+  // Se mide cuánto tarda el viaje de ida y vuelta. El progress_ms que
+  // devuelve Spotify corresponde a un instante ANTERIOR a que llegue la
+  // respuesta: aproximadamente la mitad del viaje. Sin compensarlo, la
+  // letra va sistemáticamente atrasada.
+  unsigned long t0 = millis();
   int cod = https.GET();
+  unsigned long viaje = millis() - t0;
 
   if (cod == 204) {                       // nada sonando: NO es un error (RF-06)
     if (claveActual != "__nada__") {
@@ -246,19 +384,29 @@ void consultar() {
   progresoBase = doc["progress_ms"] | 0;
   duracionMs   = doc["item"]["duration_ms"] | 0;
   sonando      = doc["is_playing"] | false;
-  instanteBase = millis();
+  instanteBase = millis() - viaje / 2;      // compensar el viaje de red
 
   String clave = String(titulo) + "|" + String(artista);
   if (clave != claveActual) {
     claveActual = clave;
     estadoPintado = ""; lineaPintada = -2;
+    colaPedida = false;
     tft.fillScreen(TFT_BLACK);
     cabecera(titulo, artista);
-    letras.limpiar();
-    zonaLetra(-1);                      // muestra "buscando letra..."
     Serial.printf("\n🎵 %s — %s\n", titulo, artista);
-    letras.buscar(rootca_crt_bundle_start, titulo, artista, album, duracionMs);
-    Serial.printf("[Letra] %d líneas · RAM %lu B\n", letras.n, (unsigned long)ESP.getFreeHeap());
+
+    if (clave == clavePrecarga && precarga.estado != LETRA_NO_BUSCADA) {
+      // 🚀 Ya la teníamos descargada: aparece al instante, sin ir a la red.
+      letras = precarga;
+      clavePrecarga = "";
+      precarga.limpiar();
+      Serial.printf("[Letra] ⚡ desde precarga (%d líneas)\n", letras.n);
+    } else {
+      letras.limpiar();
+      zonaLetra(-1);                    // "buscando letra..."
+      letras.buscar(rootca_crt_bundle_start, titulo, artista, album, duracionMs);
+      Serial.printf("[Letra] %d líneas · RAM %lu B\n", letras.n, (unsigned long)ESP.getFreeHeap());
+    }
     lineaPintada = -2;                  // forzar repintado con la letra ya cargada
   }
   barraEstado(sonando ? "SONANDO" : "EN PAUSA", sonando ? VERDE_SPOTIFY : GRIS);
@@ -301,8 +449,23 @@ void loop() {
 
   unsigned long ahora = millis();
 
-  // A Spotify se le pregunta cada 5 s...
-  if (ahora - ultimaConsulta >= CADA_CUANTO_MS) { ultimaConsulta = ahora; consultar(); }
+  // Sondeo ADAPTATIVO: normalmente cada 5 s, pero en los últimos 15
+  // segundos de la canción cada 1 s. Así el cambio de canción se detecta
+  // casi al instante, sin gastar peticiones el resto del tiempo.
+  long falta = duracionMs - progresoAhora();
+  unsigned long intervalo = (sonando && duracionMs > 0 && falta < (long)UMBRAL_FIN_MS)
+                            ? CERCA_DEL_FIN_MS : CADA_CUANTO_MS;
+
+  if (ahora - ultimaConsulta >= intervalo) { ultimaConsulta = ahora; consultar(); }
+
+  // Una vez la canción está en marcha, se aprovecha para descargar la
+  // letra de la siguiente. Se hace a los 8 s para no competir con la
+  // carga de la actual.
+  if (!colaPedida && sonando && letras.estado != LETRA_NO_BUSCADA
+      && progresoAhora() > 8000 && claveActual.length() && claveActual[0] != '_') {
+    colaPedida = true;
+    precargarSiguiente();
+  }
 
   // ...pero la letra se refresca 6 veces por segundo, calculando el
   // progreso a partir del reloj interno. Así avanza suave en vez de a
