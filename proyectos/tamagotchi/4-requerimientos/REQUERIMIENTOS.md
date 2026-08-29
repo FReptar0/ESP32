@@ -34,7 +34,7 @@ eso es esperado, no un problema.
 | RF-01 | Mostrar el **título** de la canción que suena | Debe | Cambio de canción en Spotify → el título nuevo aparece en pantalla en < 10 s, sin tocar nada | ✅ **Hecho** |
 | RF-02 | Mostrar el **álbum** al que pertenece | Debe | El nombre del álbum se ve junto al título, sin cortar información crítica | ✅ **Hecho** |
 | RF-03 | Mostrar el **artista** | Debería | Se distingue claramente del título | ✅ **Hecho** |
-| RF-04 | Mostrar la **letra** sincronizada con la canción | Debería | La línea en pantalla corresponde a lo que se está cantando, con < 2 s de desfase | 🔲 Pendiente |
+| RF-04 | Mostrar la **letra** sincronizada con la canción | Debería | La línea en pantalla corresponde a lo que se está cantando, con < 2 s de desfase | 🟡 Implementado, falta verlo en marcha |
 | RF-05 | Conectarse a WiFi solo, al encender | Debe | Se enchufa y a los < 30 s ya está mostrando algo, sin intervención | ✅ **Hecho** |
 | RF-06 | Indicar visualmente cuando **no** hay nada sonando | Debe | Pantalla en reposo distinguible, no la última canción congelada | 🟡 Implementado, falta verlo |
 | RF-07 | Indicar visualmente cuando **perdió la conexión** | Debería | Se distingue "no hay música" de "no hay internet" — son problemas distintos | 🟡 Implementado, falta verlo |
@@ -125,6 +125,7 @@ que el proyecto pueda terminarse:
 | Fecha | Cambio | Motivo |
 |---|---|---|
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
+| 2026-08-29 | RF-04 implementado: letras sincronizadas desde LRCLIB | Búsqueda en dos pasos + lector de respuestas troceadas. Falta verificarlo mirando |
 | 2026-08-29 | S-05 resuelto — **los 9 supuestos cerrados**. ADR-0003 aceptado (LRCLIB) | La API verificada con consultas reales. La canción que parecía faltar sí estaba: el fallo era la duración |
 | 2026-08-29 | RF-01, RF-02, RF-03 y RF-05 ✅ HECHOS | La pantalla muestra canción, artista, álbum y progreso, en vivo |
 | 2026-08-29 | RNF-01 resuelto (fuente 4). El texto disponible baja a ~17 car. × 9 líneas | Medición perceptual en la pantalla real. Casi la mitad de lo estimado con fuente 8×16: aprieta el RF-04 |

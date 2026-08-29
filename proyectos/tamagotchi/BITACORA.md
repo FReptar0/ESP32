@@ -337,9 +337,57 @@ Consecuencia práctica: **la fuente 4 es la más grande con alfabeto completo** 
 las integradas. Refuerza la elección del RNF-01. Para títulos más grandes habría
 que usar fuentes externas (`LOAD_GFXFF`, ya habilitado).
 
+### 🎤 Paso 8 — letras sincronizadas funcionando
+
+```
+[Letra] buscando: 4Me 4Me — Malcolm Todd (210s)
+[Letra] exacta -> HTTP 200 ✅
+[Letra] 30 líneas · RAM 193004 B
+```
+
+**Cómo se ve:** la línea que toca en fuente 4 blanca, centrada, con la anterior
+en gris tenue arriba y la siguiente en gris abajo. Ese contexto es lo que permite
+seguir la canción con la vista sin esfuerzo.
+
+**El detalle que hace que se vea bien:** a Spotify se le pregunta cada 5 s, pero
+la letra se refresca **6 veces por segundo**, calculando el progreso a partir del
+reloj interno del ESP32 (`progresoBase + tiempo transcurrido`). Sin eso la letra
+saltaría de golpe cada 5 segundos y quedaría fatal — y encima gastaría peticiones
+de más.
+
+### 🐛 Dos errores propios que valió la pena documentar
+
+**1. `Transfer-Encoding: chunked`** — LRCLIB devolvía **HTTP 200** y el firmware
+decía "no encontrada". La causa: LRCLIB manda la respuesta por trozos, con el
+tamaño de cada uno en hexadecimal antes del contenido, y
+`HTTPClient::getStream()` entrega eso **crudo**. ArduinoJson veía `1f4a{"id":...`
+y fallaba. Spotify manda `Content-Length`, por eso el mismo código funcionaba ahí
+y no aquí.
+
+Se escribió `LectorChunked`, que quita las marcas al vuelo y mantiene el
+streaming — sin cargar los 91 KB en memoria, que era todo el objetivo del
+ADR-0003.
+
+🔑 **Un HTTP 200 solo dice que el servidor respondió bien, no que tú lo hayas
+entendido bien.** Ante un fallo con 200, sospechar del parseo, no de la petición.
+
+**2. Macros de Arduino: `HEX` y `cli`** — dos errores de compilación seguidos con
+mensajes que no señalaban el problema real. `HEX` es una macro con valor 16 (la
+de `Serial.print(x, HEX)`), así que `HEX[i]` se convertía en `16[i]`. Y `cli()`
+es la de deshabilitar interrupciones.
+
+🔑 **Si un nombre corto y común da un error sin sentido, sospecha de una macro.**
+
+Detalle en [`5-investigacion/chunked-encoding.md`](5-investigacion/chunked-encoding.md)
+y [`macros-de-arduino.md`](5-investigacion/macros-de-arduino.md).
+
 ### 🔜 En qué me quedé — siguiente sesión
 
 **Verificaciones pendientes de mirar:**
+- **La letra: ¿va sincronizada con lo que se canta?** Es lo único que no puedo
+  comprobar yo
+- ¿Qué pasa con una canción sin letra en LRCLIB? Debe decir "sin letra" y seguir
+  mostrando todo lo demás
 - Pausar Spotify → debe aparecer "EN PAUSA" y la barra ponerse gris (RF-06)
 - Apagar el WiFi → debe aparecer "Sin conexión" en rojo (RF-07)
 - Ver la pantalla a oscuras y ajustar el brillo (RNF-02)

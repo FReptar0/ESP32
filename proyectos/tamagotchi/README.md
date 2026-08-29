@@ -37,42 +37,53 @@ graph LR
 
 ## ✅ Funcionando
 
-El requerimiento original del proyecto —*"mostrar lo que estoy escuchando en
-Spotify, la canción y el disco al que pertenece"*— **está cumplido**.
-
 ```
 ┌────────────────────────────┐
-│ SONANDO                    │
-│ ──────────────────────────  │
+│ SONANDO              4:12  │
+│ ────────────────────────── │
+│         4Me 4Me            │  ← título, fuente 2
+│       Malcolm Todd         │  ← artista, verde Spotify
+│ ────────────────────────── │
+│   línea anterior en gris   │
 │                            │
-│      Chilango Blues        │  ← fuente 4, blanco
+│   LA LÍNEA QUE SE CANTA    │  ← fuente 4, blanca
 │                            │
-│       Mon Laferte          │  ← fuente 4, verde Spotify
-│      Chilango Blues        │  ← fuente 2, gris
+│    la línea que sigue      │
 │                            │
 │  ████████░░░░░░░░░░░░░░░░  │
-│  1:24                3:57  │
+│  1:24                3:30  │
 └────────────────────────────┘
 ```
 
-**RF-01, RF-02, RF-03 y RF-05 cerrados.** El ESP32 lo hace todo solo: se conecta,
-sincroniza la hora, valida el certificado de Spotify, renueva su propio token
-cada hora y dibuja. Sin la Mac de por medio.
+**El proyecto hace todo lo que se pidió al empezar**, incluidas las letras.
+Y lo hace el ESP32 solo: se conecta, sincroniza la hora, valida el certificado
+de Spotify, renueva su token cada hora, busca la letra en LRCLIB y dibuja.
 
-### 🔜 Siguiente: las letras (RF-04)
+| Fase | |
+|---|---|
+| 1 · Decisiones | 🟢 7 ADRs, todos cerrados |
+| 2 · Entorno | 🟢 Recompila en ~30 s |
+| 3 · Componentes | 🟢 ESP32 y GMT130 confirmados |
+| 4 · Requerimientos | 🟢 **9 de 9 supuestos resueltos** |
+| 5 · Investigación | 🟢 12 hallazgos documentados |
+| 6 · Esquemas | 🟢 Plano lógico y físico |
+| 7 · Firmware | 🟢 Completo hasta el paso 8 |
 
-**La prueba más barata primero, y no necesita programar nada:** entra a
-[lrclib.net](https://lrclib.net) y busca **5 canciones que escuches de verdad**.
-Si tres no aparecen, hay que replantear el requerimiento antes de invertirle
-tiempo (supuesto S-05).
+### 🔜 Lo que falta por verificar
 
-### Pendientes menores
+Cosas que **solo tú puedes comprobar**, porque hay que mirar:
 
-- Verificar RF-06 (pausar Spotify → "EN PAUSA") y RF-07 (apagar el WiFi → rojo)
-- Ver la pantalla a oscuras y ajustar el brillo (RNF-02)
+- **¿La letra va sincronizada con lo que se canta?**
+- Dale pausa → debe decir `EN PAUSA` y la barra ponerse gris (RF-06)
+- Apaga el WiFi → debe salir `Sin conexión` en rojo (RF-07)
+- Míralo a oscuras → ajustar el brillo si molesta (RNF-02)
+
+### Mejoras pendientes
+
+- Títulos largos se cortan con `...`; con *sprites* podrían desplazarse
 - Prueba de 24 h para cerrar el RNF-06
 - Timeout en la sincronización NTP
-- Títulos largos: hoy se cortan con `...`; con *sprites* se podrían desplazar
+- Los controles de reproducción (RF-08/09/10): los permisos ya están pedidos
 
 ## Cómo está organizado
 

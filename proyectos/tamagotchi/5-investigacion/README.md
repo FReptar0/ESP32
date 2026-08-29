@@ -30,6 +30,31 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — `Transfer-Encoding: chunked` rompía la lectura de LRCLIB
+
+**Qué se averiguó:** LRCLIB devolvía HTTP 200 y el firmware decía "no
+encontrada". La causa: LRCLIB manda la respuesta **por trozos**, y
+`HTTPClient::getStream()` del ESP32 entrega el chorro crudo **con las marcas de
+tamaño incluidas**. ArduinoJson veía `1f4a{"id":...` y fallaba. Spotify manda
+`Content-Length`, por eso ahí el mismo código sí funcionaba.
+**Fuente:** diagnóstico propio — ver [`chunked-encoding.md`](chunked-encoding.md).
+**Por qué importa:** 🔑 **un HTTP 200 solo dice que el servidor respondió bien,
+no que tú lo hayas entendido bien.** Ante un fallo con 200, sospechar del parseo.
+**Confianza:** máxima (arreglado y verificado).
+**Consecuencia:** se escribió `LectorChunked`, que quita las marcas al vuelo y
+mantiene el streaming — sin cargar los 91 KB en memoria.
+
+### 2026-08-29 — Arduino define macros con nombres muy comunes (`HEX`, `cli`…)
+
+**Qué se averiguó:** dos errores de compilación seguidos, con mensajes que no
+señalaban el problema. `HEX` es una macro con valor 16 y `cli()` es la de
+deshabilitar interrupciones.
+**Fuente:** propio — ver [`macros-de-arduino.md`](macros-de-arduino.md).
+**Por qué importa:** 🔑 **si un nombre corto y común da un error sin sentido,
+sospecha de una macro.** El preprocesador cambió el código antes de compilarlo.
+**Confianza:** máxima.
+
+
 ### 2026-08-29 — ✅ LRCLIB sirve, y la duración es la clave del cruce (resuelve S-05)
 
 **Qué se averiguó:** LRCLIB no pide autenticación, es gratis y tiene buena
