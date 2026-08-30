@@ -96,8 +96,6 @@ No asumir que ya se dijeron. Repetirlos en contexto:
 
 ---
 
----
-
 ## Skills de este taller
 
 | Skill | Cuándo usarla |
@@ -113,12 +111,28 @@ mirando la pantalla. `/cerrar-sesion` captura eso; las genéricas no.
 
 ## Estado actual
 
-**Bloqueante:** la Mac no detecta el ESP32 (verificado 2026-08-29 por dos vías
-independientes: árbol USB del sistema y `pio device list`). Diagnóstico completo
-en [`proyectos/tamagotchi/BITACORA.md`](proyectos/tamagotchi/BITACORA.md).
+🟢 **El Tamagotchi funciona.** Muestra en pantalla la canción, artista, álbum,
+playlist, progreso y **letras sincronizadas**, con el certificado de Spotify
+verificado. El ESP32 lo hace todo solo: se conecta, sincroniza la hora, renueva
+su propio token y dibuja.
 
-Antes de sugerir cualquier paso de firmware, verificar si esto ya se resolvió:
+- Placa: **ESP32-D0WD-V3**, MAC `84:1F:E8:2C:3E:C4`, puerto `/dev/cu.usbserial-0001`
+- Pantalla: **GMT130** (ST7789, 240×240) cableada según
+  [`6-esquemas/conexiones-fisicas.md`](proyectos/tamagotchi/6-esquemas/conexiones-fisicas.md)
+- Los **9 supuestos** del proyecto están resueltos y los **9 ADRs** decididos
+
+**Arquitectura del firmware:** tres hilos —Spotify (rápido), letras (lento) y
+dibujo—, con un mutex de red que garantiza **una sola conexión cifrada a la vez**.
+Ver [`6-esquemas/mapa-de-memoria.md`](proyectos/tamagotchi/6-esquemas/mapa-de-memoria.md).
+
+Antes de dar por hecho cualquier estado, compruébalo:
 
 ```bash
-ls /dev/cu.* | grep -iE 'usbserial|wchusbserial|usbmodem'
+ls /dev/cu.usbserial*                    # ¿está la placa?
+lsof /dev/cu.usbserial-0001              # ¿alguien ocupa el puerto?
+git log --oneline -5                     # ¿qué se hizo al final?
 ```
+
+Y lee la última entrada de
+[`proyectos/tamagotchi/BITACORA.md`](proyectos/tamagotchi/BITACORA.md): ahí está
+en qué se quedó y qué falta por verificar mirando.
