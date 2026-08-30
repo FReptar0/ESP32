@@ -239,3 +239,5 @@ Cosas que ya costaron tiempo. Si la siguiente sesión las conoce, no las repite:
 | **`HTTPClient::header()` devuelve vacío** | Una cabecera de respuesta siempre sale 0 o "" | Hay que pedirla antes con `collectHeaders()`. No falla: miente |
 | **Abrir el puerto serie sin tocar DTR/RTS** | La captura sale como basura ilegible, megas de símbolos | Abrir el puerto en macOS activa DTR/RTS y deja la placa en modo arranque. Hacer siempre la secuencia de reinicio: `setDTR(False); setRTS(True); sleep; setRTS(False)` |
 | **Pines del ADC2 con WiFi encendido** | El sensor analógico funciona suelto y falla al añadir la red | El driver de WiFi se apropia del ADC2. Solo ADC1: GPIO 32–36 y 39 |
+| **Dos `403` que no significan lo mismo** | Un endpoint devuelve 403 y parece que falta un permiso | `"Insufficient client scope"` = falta permiso, se arregla autorizando. **`"Forbidden"` a secas = endpoint cerrado para esta app**, ningún permiso lo abre. Leer SIEMPRE el mensaje |
+| **Leer una sola vez algo que puede aparecer después** | Una playlist creada hoy no sale hasta reiniciar | Un dato que cambia solo no se lee una vez. Y "poder cambiar" incluye "todavía no existe" |

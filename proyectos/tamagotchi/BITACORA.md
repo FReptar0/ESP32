@@ -15,21 +15,24 @@ fallaron, las horas perdidas, las sospechas sin confirmar. Las *decisiones* van 
 | | |
 |---|---|
 | Placa | ESP32-D0WD-V3 · MAC `84:1F:E8:2C:3E:C4` · `/dev/cu.usbserial-0001` |
-| Firmware cargado | La placa dice **`5e3eadb`**, sin `+cambios`: coincide exactamente con `HEAD`. Todo lo de la sesión está commiteado y cargado. *Verificado preguntándole a la placa después de commitear.* |
+| Firmware cargado | La placa dice **`822aed1`**, sin `+cambios`: coincide con `HEAD`. Todo commiteado y cargado. *Verificado preguntándoselo a la placa.* |
 | Cableado | GMT130 según [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md) **+ joystick C-005** según [`6-esquemas/conexiones-joystick.md`](6-esquemas/conexiones-joystick.md) |
-| Al cerrar | **Encendida y funcionando**, en modo portada, sonando desde la playlist `Alo 💜` |
+| Al cerrar | **Encendida y funcionando**, en el selector con las **3 playlists** cargadas |
 | Puerto serie | Libre, sin procesos colgados |
 
 **Medido al cerrar** (no supuesto):
 
 ```
-RAM libre 183.468 B · mínimo histórico 75.296 B · bloque contiguo 110.580 B
-fotograma medio 6 ms · peor 308 ms (el peor coincide con dibujar una portada)
+RAM libre 135.000–181.752 B · mínimo histórico 58.992 B
+bloque contiguo 59.380 B — ESTABLE en 5 latidos seguidos
+fotograma medio 5 ms · peor 6–7 ms en reposo, ~250 ms al dibujar una imagen
 0 reinicios
 ```
 
-🔑 El **bloque contiguo en 110.580** es el dato que importa: con la caché de
-portada puesta se quedaba clavado en 45.044. Ver la sección de la caché.
+🔑 Sobre el **bloque contiguo**: sin la caché de portada volvía a 110.580. Con la
+lista de playlists cargada se asienta en **59.380** y ahí se queda. Lo que
+importaba no era el número sino que **dejara de bajar**, y lo hace: con la caché
+puesta caía a 45.044 y seguía. **Medido, no supuesto.**
 
 ---
 
@@ -155,6 +158,54 @@ no avisa de quién dependía de que no cambiara.
 
 ---
 
+### 🎵 Cierre: la playlist `A&F` y dos hallazgos que salieron con ella
+
+El usuario pidió **fusionar `Alo 💜` y `for you`** con la API para crear la
+playlist que faltaba. **No se puede**, y averiguar por qué dio el hallazgo:
+
+```
+GET /playlists/{id}/tracks  ->  403  "Forbidden"
+GET /me/tracks              ->  403  "Insufficient client scope"
+```
+
+🔑 **Dos 403 que no significan lo mismo.** El segundo dice *falta un permiso* y
+se arregla volviendo a autorizar. El primero dice *prohibido a secas*: el
+endpoint está cerrado para las apps en Modo Desarrollo y **ningún permiso lo
+abre**. Sin leer ese mensaje uno se pasa la tarde pidiendo scopes inútiles.
+
+Sin arreglo posible: el Modo Extendido exige 250.000 usuarios activos. Ampliado
+en [`spotify-api-2026.md`](5-investigacion/spotify-api-2026.md), que decía *"los
+recortes no nos afectan"* — cierto para el aparato, pero generalizado de más.
+
+**El usuario la creó a mano** en la app de Spotify. Y eso destapó un fallo mío:
+
+> La lista de playlists se pedía **una vez por arranque**. Como ya había
+> encontrado dos de las tres, no volvía a mirar nunca — y `A&F`, creada al día
+> siguiente, no habría aparecido hasta reiniciar. Eso rompía justo la promesa de
+> buscar **por prefijo de nombre** en vez de por identificador.
+
+🔑 **Un dato que puede cambiar solo no se puede leer una sola vez. Y "poder
+cambiar" incluye "todavía no existe".**
+
+Arreglado con dos ritmos: cada 15 s si no hay ninguna (algo va mal), cada 5 min
+si faltan algunas (todavía no existen). Verificado: `3 de 3 encontradas`.
+
+#### 🍀 Y ese arreglo se justificó solo, en el arranque siguiente
+
+```
+[Listas] JSON: IncompleteInput      <- el PRIMER intento fallo
+[Listas] 3 de 3 encontradas         <- el reintento a los 15 s funciono
+```
+
+La respuesta de `/me/playlists` llegó truncada. Con el código anterior el aparato
+habría dicho **"sin playlists" hasta el siguiente reinicio**. Es exactamente el
+fallo pasajero que se convertía en permanente, cazado en vivo dos horas después
+de arreglarlo.
+
+**Supuesto, no medido:** que ese `IncompleteInput` sea ocasional. Se ha visto una
+vez. Si se repitiera a menudo habría que mirar el troceado de esa respuesta, que
+es de las grandes.
+
 ### 🔜 En qué me quedé — siguiente sesión
 
 #### 👀 Verificaciones que solo puedes hacer TÚ mirando
@@ -176,8 +227,9 @@ no avisa de quién dependía de que no cambiara.
    veces por recargas de firmware. Con el código actual el bloque vuelve a
    110.580, pero conviene dejarlo grabando una tarde entera:
    `python3 tools/registrar-serie.py 120`.
-3. **La playlist `A&F` no existe todavía.** En cuanto la crees aparecerá sola en
-   el selector: se busca por prefijo de nombre, no por identificador.
+3. ~~**La playlist `A&F` no existe todavía.**~~ ✅ **Creada el 2026-08-30** por el
+   usuario, a mano en la app de Spotify (fusionarla por API es imposible). El
+   aparato la encuentra sola: `3 de 3 encontradas`.
 
 #### 📋 Pendientes de menor urgencia
 
