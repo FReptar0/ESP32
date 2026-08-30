@@ -34,7 +34,7 @@ eso es esperado, no un problema.
 | RF-01 | Mostrar el **título** de la canción que suena | Debe | Cambio de canción en Spotify → el título nuevo aparece en pantalla en < 10 s, sin tocar nada | ✅ **Hecho** |
 | RF-02 | Mostrar el **álbum** al que pertenece | Debe | El nombre del álbum se ve junto al título, sin cortar información crítica | ✅ **Hecho** |
 | RF-03 | Mostrar el **artista** | Debería | Se distingue claramente del título | ✅ **Hecho** |
-| RF-04 | Mostrar la **letra** sincronizada con la canción | Debería | La línea en pantalla corresponde a lo que se está cantando, con < 2 s de desfase | 🟡 Implementado, falta verlo en marcha |
+| RF-04 | Mostrar la **letra** sincronizada con la canción | Debería | La línea en pantalla corresponde a lo que se está cantando, con < 2 s de desfase | ✅ **Hecho** — sincronía confirmada mirando |
 | RF-05 | Conectarse a WiFi solo, al encender | Debe | Se enchufa y a los < 30 s ya está mostrando algo, sin intervención | ✅ **Hecho** |
 | RF-06 | Indicar visualmente cuando **no** hay nada sonando | Debe | Pantalla en reposo distinguible, no la última canción congelada | 🟡 Implementado, falta verlo |
 | RF-07 | Indicar visualmente cuando **perdió la conexión** | Debería | Se distingue "no hay música" de "no hay internet" — son problemas distintos | 🟡 Implementado, falta verlo |
@@ -50,7 +50,7 @@ eso es esperado, no un problema.
 | RNF-02 | No molesta de noche | No ilumina la habitación a oscuras | 🟡 Brillo por PWM al 55% implementado. Falta probarlo a oscuras y ajustar |
 | RNF-03 | Cabe en un escritorio | < 10 × 10 × 10 cm aprox. | Medir |
 | RNF-04 | El proyecto se puede recompilar dentro de un año y funciona igual | Versiones fijadas en `platformio.ini` | Ver [ADR-0001](../1-decisiones/ADR-0001-plataforma-de-desarrollo.md) |
-| RNF-05 | Las credenciales no acaban en ningún repositorio | 0 secretos en Git | `.gitignore` + revisión antes de cada commit |
+| RNF-05 | ~~Las credenciales no acaban en ningún repositorio~~ | 0 secretos en Git | ✅ **Verificado** — comprobación automatizada en la skill `/cerrar-sesion` |
 | RNF-06 | Funciona indefinidamente sin reiniciarlo a mano | > 7 días encendido sin colgarse | 🟢 **Sin fuga confirmado** con el firmware completo: plano en 5 min, cero fragmentación, 97 KB de margen en el peor instante ([medición](../5-investigacion/memoria-en-regimen-2.md)) |
 
 ---
@@ -127,6 +127,7 @@ que el proyecto pueda terminarse:
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
 | 2026-08-29 | RF-04 implementado: letras sincronizadas desde LRCLIB | Búsqueda en dos pasos + lector de respuestas troceadas. Falta verificarlo mirando |
 | 2026-08-29 | S-05 resuelto — **los 9 supuestos cerrados**. ADR-0003 aceptado (LRCLIB) | La API verificada con consultas reales. La canción que parecía faltar sí estaba: el fallo era la duración |
+| 2026-08-29 | **RF-04 ✅ HECHO** — letras sincronizadas funcionando y confirmadas mirando. RNF-05 verificado | Cierre de sesión |
 | 2026-08-29 | RF-01, RF-02, RF-03 y RF-05 ✅ HECHOS | La pantalla muestra canción, artista, álbum y progreso, en vivo |
 | 2026-08-29 | RNF-01 resuelto (fuente 4). El texto disponible baja a ~17 car. × 9 líneas | Medición perceptual en la pantalla real. Casi la mitad de lo estimado con fuente 8×16: aprieta el RF-04 |
 | 2026-08-29 | RF-01/02/03/05/06 con datos funcionando; riesgo de certificados mitigado | El ESP32 lee Spotify con certificado verificado. ADR-0009 cerrado |

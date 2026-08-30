@@ -8,6 +8,43 @@ fallaron, las horas perdidas, las sospechas sin confirmar. Las *decisiones* van 
 
 ## 2026-08-29 — Sesión 1: arranque del taller, y la caza del cable
 
+### 🔚 Cierre de sesión — leer esto primero al retomar
+
+**Estado físico (lo que no está en Git):**
+
+| | |
+|---|---|
+| Placa | ESP32-D0WD-V3 · MAC `84:1F:E8:2C:3E:C4` · `/dev/cu.usbserial-0001` |
+| Firmware cargado | commit **`27de53e`** *(los dos commits posteriores son solo documentación)* |
+| Cableado | GMT130 montada según [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md) |
+| Al cerrar | **Encendida y funcionando**, mostrando *Comerte Entera — C. Tangana* con 41 líneas de letra |
+| Puerto serie | Libre, sin procesos colgados |
+
+**Medido al cerrar** (no supuesto):
+
+```
+RAM libre 187 KB · mínimo histórico 75 KB · bloque contiguo 77 KB
+0 reinicios · letra descargada y publicada correctamente
+```
+
+**Hallazgo de última hora:** al comprobar el estado apareció
+`[Contexto] HTTP 404 -> ""`. Es una **playlist privada**: leer su nombre exige el
+permiso `playlist-read-private`. Ya está añadido al perfil `esp32` de
+[`tools/get-refresh-token.py`](tools/get-refresh-token.py), pero **el token
+actual se generó antes** y no lo lleva. Se arregla volviendo a correr el script.
+No rompe nada: esas playlists muestran "Playlist" en vez de su nombre.
+
+### ✅ Lo que quedó verificado esta sesión
+
+| Cosa | Cómo se comprobó |
+|---|---|
+| Sin fugas de memoria | 11 muestras en 5,5 min: segunda mitad −28 B, bloque contiguo vuelve siempre a 110.580 |
+| Sin reinicios | 0 en 150 s tras el mutex de red (antes: 11) |
+| Frases largas completas | Los 90 caracteres de *"Honey, honey get the kids…"* en 4 renglones |
+| Cambio de canción no se atasca | `Staring` → `Sue Me` → `HOLIDAY` seguidas, las tres con su letra |
+| Acentos y emojis | `León Larregui`, `Como Tú`, `Cariño`, `Alo 💜` |
+
+
 ### Qué se hizo
 
 - Se armó la estructura completa del taller y la metodología de 6 fases.
@@ -840,25 +877,45 @@ Detalle en [`5-investigacion/emojis-e-iconos.md`](5-investigacion/emojis-e-icono
 
 ### 🔜 En qué me quedé — siguiente sesión
 
-**Verificaciones pendientes de mirar:**
-- ¿Se ve bien el corazón morado de la playlist `Alo 💜`?
-- ¿La descripción se desplaza suave o da tirones?
-- ¿La fuente Avenir Next convence, o probamos Futura?
-- **La letra: ¿va sincronizada con lo que se canta?** Es lo único que no puedo
-  comprobar yo
-- ¿Qué pasa con una canción sin letra en LRCLIB? Debe decir "sin letra" y seguir
-  mostrando todo lo demás
-- Pausar Spotify → debe aparecer "EN PAUSA" y la barra ponerse gris (RF-06)
-- Apagar el WiFi → debe aparecer "Sin conexión" en rojo (RF-07)
-- Ver la pantalla a oscuras y ajustar el brillo (RNF-02)
+#### 👀 Verificaciones que solo puedes hacer tú (mirando)
 
-**Lo siguiente de verdad:** las letras (RF-04). Antes de programar nada, la
-prueba barata: buscar en LRCLIB 5 canciones que escuches de verdad. Si tres no
-aparecen, hay que replantear el requerimiento (S-05).
+Ninguna de estas se puede comprobar desde la terminal. Están con la respuesta que
+se espera, para que no haya que interpretarlas:
 
-**Mejora pendiente:** títulos largos se cortan con `...`. Un desplazamiento
-horizontal se vería mucho mejor, y `TFT_eSPI` trae *sprites* para hacerlo sin
-parpadeo — fue una de las razones del ADR-0008.
+| Qué probar | Qué debería pasar |
+|---|---|
+| Dale **pausa** en Spotify | El símbolo de arriba a la derecha pasa a ⏸ y la barra de progreso se pone gris, en < 2 s |
+| **Apaga el WiFi** del router | Aparece `Sin conexión` en rojo, y vuelve solo al restaurarlo |
+| Míralo **a oscuras** | No debería iluminar la habitación. Si molesta, es bajar `BRILLO` (ahora 140 de 255) |
+| Deja pasar una **intro instrumental** | Nota musical blanca centrada + la frase que viene en gris debajo |
+| Una canción **sin letra** en LRCLIB | Dice `sin letra` pero sigue mostrando canción, artista y progreso |
+| El **desplazamiento** de la descripción | Continuo y sin tirones, incluso mientras carga una letra nueva |
+| La **transición** entre frases | Aparición gradual de gris a blanco, sin parpadeo |
+
+#### 🎯 La siguiente acción concreta
+
+**Volver a correr el script de OAuth** para que el token incluya
+`playlist-read-private`:
+
+```bash
+cd proyectos/tamagotchi
+python3 tools/get-refresh-token.py
+```
+
+Con eso las playlists privadas mostrarán su nombre en vez de "Playlist". Es lo
+único pendiente que produce un síntoma visible hoy.
+
+#### 📋 Pendientes de menor urgencia
+
+- **Prueba de resistencia de 24 h** para cerrar el RNF-06 del todo. La evidencia
+  actual (sin fugas, sin fragmentación, 11 muestras) es fuerte pero no definitiva.
+- **Timeout en la sincronización NTP.** Hoy, si el router bloqueara el puerto 123,
+  el arranque se quedaría esperando para siempre.
+- **Controles de reproducción** (RF-08/09/10: pausar, saltar, volumen). Los
+  permisos ya están pedidos; falta el hardware de entrada (botones o encoder) y
+  decidir en un ADR cómo se interactúa.
+- **La parte "Tamagotchi"** propiamente dicha: la mascota que reacciona a la
+  música. Sigue fuera de alcance de la v1, a propósito.
 
 ### 📜 Historial anterior
 

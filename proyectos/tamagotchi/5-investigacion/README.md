@@ -30,6 +30,20 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-29 — Las playlists privadas devuelven 404 sin el permiso adecuado
+
+**Qué se observó:** `[Contexto] HTTP 404 -> ""` al reproducir desde una playlist
+propia. No es un fallo del código: leer el nombre de una playlist **privada**
+exige el permiso `playlist-read-private`, que no se pidió en el token original.
+**Fuente:** observado al cerrar la sesión, con el aparato funcionando.
+**Confianza:** alta — el resto de contextos (`Liked Songs`, `for you`) sí
+resuelven, así que la diferencia es la privacidad de la playlist.
+**Consecuencia:** el permiso ya está en el perfil `esp32` de
+[`tools/get-refresh-token.py`](../tools/get-refresh-token.py); basta con volver a
+correrlo para regenerar el token. Mientras tanto el aparato muestra "Playlist" en
+vez del nombre: **degrada, no falla**.
+
+
 ### 2026-08-29 — 💥 Dos handshakes TLS a la vez reiniciaban la placa
 
 **Qué pasaba:** `Task watchdog got triggered: IDLE0 did not reset` — 11 reinicios
