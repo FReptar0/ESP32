@@ -160,6 +160,22 @@ por mi cuenta.
   con otro cable USB (que sea de datos, no de solo carga) y conectando directo a
   la Mac en vez de al dock.
 
+## 2026-08-29 — `ALTA` — Módulo joystick analógico de 2 ejes (C-005)
+
+- **Qué pasó:** Se registra un joystick que ya tenías, para los controles de
+  reproducción del Tamagotchi (RF-08, RF-09, RF-10) y la navegación entre modos.
+- **Estado:** — → `Disponible`
+- **Proyecto:** tamagotchi
+- **Specs observadas:** 5 pines rotulados `GND`, `+5V`, `VRx`, `VRy`, `SW`. Es la
+  forma estándar del módulo tipo KY-023: **dos potenciómetros de 10 kΩ** (uno por
+  eje) y un **pulsador** que cierra a `GND` al empujar la palanca hacia abajo.
+- **Nota:** ⚠️ El rótulo `+5V` es engañoso. **Se alimentará a 3,3 V, no a 5 V.**
+  A 5 V las salidas `VRx`/`VRy` llegarían a 5 V y los pines del ESP32 no toleran
+  más de 3,3 V. Al ser potenciómetros, funcionan igual con menos tensión: solo
+  cambia el rango de lectura, no el comportamiento.
+  Pendiente confirmar midiendo que en reposo cada eje queda cerca de la mitad
+  del rango.
+
 ## 2026-08-29 — `ALTA` — ESP32-S NodeMCU (C-001)
 
 - **Qué pasó:** Se registra la placa que ya tenías al arrancar el taller.

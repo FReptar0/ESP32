@@ -6,7 +6,7 @@ fallaron, las horas perdidas, las sospechas sin confirmar. Las *decisiones* van 
 
 ---
 
-## 2026-08-29 — Sesión 1: arranque del taller, y la caza del cable
+## 2026-08-30 — Sesión 2: el joystick, los cuatro modos, y dos días equivocándome con método
 
 ### 🔚 Cierre de sesión — leer esto primero al retomar
 
@@ -15,7 +15,194 @@ fallaron, las horas perdidas, las sospechas sin confirmar. Las *decisiones* van 
 | | |
 |---|---|
 | Placa | ESP32-D0WD-V3 · MAC `84:1F:E8:2C:3E:C4` · `/dev/cu.usbserial-0001` |
-| Firmware cargado | commit **`27de53e`** *(los dos commits posteriores son solo documentación)* |
+| Firmware cargado | La placa dice **`d323061+cambios`**. ⚠️ Ese `+cambios` es **TODO el trabajo de esta sesión**: joystick, controles, los cuatro modos, la portada y el selector. Sin commitear al escribir esto |
+| Cableado | GMT130 según [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md) **+ joystick C-005** según [`6-esquemas/conexiones-joystick.md`](6-esquemas/conexiones-joystick.md) |
+| Al cerrar | **Encendida y funcionando**, en modo portada, sonando desde la playlist `Alo 💜` |
+| Puerto serie | Libre, sin procesos colgados |
+
+**Medido al cerrar** (no supuesto):
+
+```
+RAM libre 183.468 B · mínimo histórico 75.296 B · bloque contiguo 110.580 B
+fotograma medio 6 ms · peor 308 ms (el peor coincide con dibujar una portada)
+0 reinicios
+```
+
+🔑 El **bloque contiguo en 110.580** es el dato que importa: con la caché de
+portada puesta se quedaba clavado en 45.044. Ver la sección de la caché.
+
+---
+
+### 🕹️ Lo que se añadió
+
+**El joystick (C-005) funciona entero.** Cableado, calibrado y verificado:
+
+| Medida | Eje horizontal | Eje vertical |
+|---|---|---|
+| Reposo | ~1735–1762 | ~1739–1760 |
+| Desviación del centro teórico | **−286 a −313** | **−288 a −313** |
+| Ruido en reposo | ±4 cuentas | ±4 cuentas |
+
+⚠️ **Dos trampas del joystick, las dos costaron tiempo:**
+
+1. **Los rótulos `VRx`/`VRy` mienten.** Se refieren a los ejes *del módulo*, no a
+   los tuyos. En este montaje están **cruzados**: `VRx` es el vertical. El síntoma
+   era desconcertante — el gesto se detectaba pero saltar canciones no hacía nada.
+2. **Los ejes tienen que ir al ADC1** (GPIO 32–36, 39). El driver de WiFi se
+   apropia del ADC2, así que ahí funcionaría suelto y fallaría con la red puesta.
+   Verificado que el ADC1 no se ve afectado: el reposo medido con WiFi encendido
+   coincide con el medido sin él (1735 vs 1737).
+
+**Requerimientos cerrados:** RF-08 (pausa) ✅, RF-09 (saltar) 🟡, RF-11 (cuatro
+modos en bucle, con fundido) ✅, RF-12 (sin letra) ✅, RF-13 (portada) ✅,
+RF-14 (selector de playlists, **suena al pulsar**) ✅.
+
+**RF-10 (volumen) descartado**: los dos ejes están comprometidos y no queda por
+dónde meterlo sin pisar algo.
+
+---
+
+### 🐛 La auditoría: 5 fallos que ya estaban ahí
+
+Antes de añadir nada se auditó el firmware. Los cinco arreglados, documentados en
+[`5-investigacion/auditoria-2026-08-29.md`](5-investigacion/auditoria-2026-08-29.md):
+
+| | Fallo | Verificado |
+|---|---|---|
+| 🔴 | `renovarToken()` abría TLS **fuera del mutex de red** — la condición exacta de los 11 reinicios | ✅ sin interbloqueo |
+| 🔴 | No existía pantalla de "hay WiFi pero Spotify no responde" | ✅ **mirándola**, con un token roto a propósito |
+| 🟠 | `millis()` comparado por valor absoluto → a los 49,7 días, una hora renovando el token sin parar | ❌ no observable |
+| 🟠 | La barra de estado se **escribía desde los dos núcleos** (doble liberación del montón) | ✅ no rompió el dibujo |
+| 🟠 | El `Retry-After` de los 429 **nunca se leía**: falta `collectHeaders()` | ❌ necesitaría un 429 real |
+
+🔑 **Darle a la auditoría el histórico del proyecto fue lo que la hizo útil.**
+Separó bien los defectos reales de las decisiones conscientes, y dejó fuera —bien—
+cosas que *parecen* fallos y están razonadas.
+
+---
+
+### ❌ Cinco diagnósticos míos que resultaron falsos
+
+Se dejan escritos porque los cinco sonaban razonables, y porque lo que los tumbó
+fue siempre lo mismo: **medir**.
+
+1. **"Reutilizar la conexión TLS acelerará las letras."** Medición correcta (4 s
+   por petición, y son de *abrir*, no de descargar), conclusión falsa. Encadenar
+   peticiones dejó el aparato ciego a los cambios de canción. **Hubo que revertir
+   entero.** Y estaba documentado desde antes en
+   [`cancelacion-de-busquedas.md`](5-investigacion/cancelacion-de-busquedas.md) —
+   no lo leí porque la propia skill `/abrir-sesion` decía *"no leas la
+   investigación todavía"*. Esa frase ya no está.
+2. **"Se pierden las órdenes del joystick."** Cierto (el buzón tenía una sola
+   ranura y un gesto pisaba al anterior), pero **no era la causa** del retraso.
+3. **"La precarga de letras acapara la red."** Falso: al silenciarla la mediana
+   **empeoró** de 2,9 s a 4,4 s.
+4. **"El parpadeo es un cable flojo."** Falso. Era la portada redibujándose en
+   bucle por culpa de la caché.
+5. **"El núcleo de dibujo se ha bloqueado en un mutex."** Falso: los latidos
+   seguían saliendo cada 30 s exactos.
+
+🔑 **Una medición correcta no basta para justificar un cambio.** Los 4 s del
+punto 1 eran ciertos; lo que fallaba era la conclusión, porque ignoraba una
+restricción que alguien ya había descubierto y escrito.
+
+---
+
+### 💾 La caché de portada: probada, medida y quitada
+
+Ver [`portada-cache-descartada.md`](5-investigacion/portada-cache-descartada.md).
+
+| | Sin caché | Con caché |
+|---|---|---|
+| Bloque contiguo | **77.812 / 110.580** | **45.044, clavado** |
+| Congelones de 400 ms | 1 por canción | **repetidos en bucle** |
+
+🔑 **Guardar algo grande durante mucho tiempo en un montón pequeño no cuesta
+memoria: cuesta CONTINUIDAD.** Había 150 KB libres y aun así no cabía nada de 50.
+
+---
+
+### 🎭 Tres fallos de la misma familia, al final de la sesión
+
+Los tres salieron del mismo sitio: **valores que eran fijos y pasaron a moverse.**
+
+- **`PORTADA_ORIGEN` era la constante 300** y `consultar()` la usaba para elegir
+  la carátula. Al convertirla en variable (para medir cada imagen), tras ver una
+  playlist valía 150 — y `consultar()` se ponía a buscar una portada de 150 px,
+  que no existe. **La carátula no volvía a cargar hasta reiniciar, y solo
+  viniendo del selector.**
+- **`portadaFallida` no se limpiaba nunca** desde que se quitó la caché: una
+  imagen que fallara una vez quedaba vetada para siempre.
+- **`PORTADA_Y0` también es variable** y se usaba para borrar el hueco: viniendo
+  del selector valía 34 en vez de 28.
+
+🔑 **Convertir una constante en variable es un cambio silencioso.** El compilador
+no avisa de quién dependía de que no cambiara.
+
+---
+
+### 📏 Números medidos esta sesión
+
+| Qué | Valor | Cómo se obtuvo |
+|---|---|---|
+| Petición a Spotify | **~1000 ms** constante (894–1227) | 20 órdenes desglosadas en cola / turno / red |
+| Apretón de manos a LRCLIB | **~4000 ms** | Un 404 **sin contenido** tardó 4151 ms |
+| Orden del joystick | mediana **1,5 s**, picos de 5 s | Instrumentado el camino completo |
+| Letra tras cambiar de canción | **3,9–4,1 s** (antes 9,2) | Tras dejar de apartar el hilo por gestos que no usan red |
+| Portada de álbum 300×300 | **26–57 KB**, dibujar 170–437 ms | Descargas reales |
+| Portada 640×640 | **161 KB** → ❌ **no cabe** (211 KB de pico) | Por eso se usa la de 300 |
+| Fotograma de dibujo | medio **5–6 ms**, peor 300–450 ms | El peor coincide siempre con dibujar una imagen |
+
+---
+
+### 🔜 En qué me quedé — siguiente sesión
+
+#### 👀 Verificaciones que solo puedes hacer TÚ mirando
+
+| Qué mirar | Qué se espera |
+|---|---|
+| **Modo "sin letra"** | Título grande centrado, artista debajo en verde. ¿Se lee bien a distancia de escritorio? |
+| **Selector de playlists** | Imagen de 150 px, nombre con el corazón de `Alo 💜`, y "1 de 2" abajo |
+| **El congelón de la portada** | Al cambiar de canción en modo portada, el texto de arriba se para ~400 ms. ¿Molesta o pasa desapercibido? |
+| **¿Vuelve el parpadeo?** | Se atribuyó a la caché y se quitó. **Si vuelve, anota la hora** y se cruza con el registro |
+| **Fundido entre modos** | ~110 ms al apagar y 200 al encender. ¿Va fino o estorba al cambiar rápido? |
+
+#### 🎯 Lo siguiente
+
+1. **RF-15 y RF-16: la pantalla oculta.** Falta decidir la combinación secreta
+   —difícil de hacer sin querer, fácil de repetir— y diseñar la animación de
+   sorpresa con el `"Te quiero!!"` al salir.
+2. **La curva de fragmentación a 2 h quedó a medias.** Se interrumpió varias
+   veces por recargas de firmware. Con el código actual el bloque vuelve a
+   110.580, pero conviene dejarlo grabando una tarde entera:
+   `python3 tools/registrar-serie.py 120`.
+3. **La playlist `A&F` no existe todavía.** En cuanto la crees aparecerá sola en
+   el selector: se busca por prefijo de nombre, no por identificador.
+
+#### 📋 Pendientes de menor urgencia
+
+- **Rendirse ante una canción sin letra sigue costando ~9 s.** Investigado y sin
+  resolver: ver [`por-que-tarda-en-decir-sin-letra.md`](5-investigacion/por-que-tarda-en-decir-sin-letra.md).
+- **Picos de 5 s en las órdenes** cuando chocan con `consultar()`, que encadena
+  dos peticiones sin soltar el turno. Se decidió no tocarlo hoy.
+- **Podcasts**: `item: null` → "(sin título)" sin barra de progreso. 🟡 sin verificar.
+- **NTP sin timeout** en el arranque. Conocido desde la sesión 1.
+- ⚠️ **La protoboard no es un montaje definitivo para un regalo.** Los contactos
+  por presión se aflojan con el tiempo y los golpes. Antes de envolverlo habrá
+  que soldar o pasar a placa perforada.
+
+---
+
+## 2026-08-29 — Sesión 1: arranque del taller, y la caza del cable
+
+### 🔚 Cierre de la sesión 1 *(histórico — el estado actual está arriba)*
+
+**Estado físico (lo que no está en Git):**
+
+| | |
+|---|---|
+| Placa | ESP32-D0WD-V3 · MAC `84:1F:E8:2C:3E:C4` · `/dev/cu.usbserial-0001` |
+| Firmware cargado | la placa dice **`d4eceae+cambios`** al arrancar. Equivale a **`d323061`** (HEAD): lo único que `d323061` cambió del firmware fue ese mismo letrero de versión, cargado antes de commitearlo. **No hace falta recargar.** *Verificado el 2026-08-29 preguntándole a la placa.* |
 | Cableado | GMT130 montada según [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md) |
 | Al cerrar | **Encendida y funcionando**, mostrando *Comerte Entera — C. Tangana* con 41 líneas de letra |
 | Puerto serie | Libre, sin procesos colgados |

@@ -53,9 +53,15 @@ Consecuencias prácticas, todas ya aplicadas:
 | RF-05 | Conectarse a WiFi solo, al encender | Debe | Se enchufa y a los < 30 s ya está mostrando algo, sin intervención | ✅ **Hecho** |
 | RF-06 | Indicar visualmente cuando **no** hay nada sonando | Debe | Pantalla en reposo distinguible, no la última canción congelada | ✅ **Hecho** — verificado mirando |
 | RF-07 | Indicar visualmente cuando **perdió la conexión** | Debería | Se distingue "no hay música" de "no hay internet" — son problemas distintos | ✅ **Hecho** — verificado mirando |
-| RF-08 | **Pausar y reanudar** la reproducción desde el aparato | Podría | Un control físico pausa lo que suena en el celular o la Mac en < 2 s | 🔲 Pendiente |
-| RF-09 | **Saltar** a la canción siguiente o anterior | Podría | Igual que RF-08, con siguiente/anterior | 🔲 Pendiente |
-| RF-10 | **Ajustar el volumen** desde el aparato | Podría | Un encoder o botones cambian el volumen del aparato que reproduce | 🔲 Pendiente |
+| RF-08 | **Pausar y reanudar** la reproducción desde el aparato | **Debe** *(sube: ya hay hardware)* | Pulsar el joystick pausa o reanuda lo que suena, y se ve reflejado en pantalla en < 2 s | ✅ **Cumplido** 2026-08-29 — el icono cambia al instante (optimista) y la orden llega en ~1,5 s de mediana |
+| RF-09 | **Saltar** a la canción siguiente o anterior | **Debe** *(sube: ya hay hardware)* | Izquierda y derecha del joystick saltan a la anterior o la siguiente en < 2 s | 🟡 **Parcial** 2026-08-29 — mediana 1,5 s ✅, pero con picos de hasta 5 s al chocar con otra petición. Mitigado con el spinner |
+| RF-10 | **Ajustar el volumen** desde el aparato | Podría | Un encoder o botones cambian el volumen del aparato que reproduce | ⬜ Descartado en v2 — el joystick (C-005) no tiene eje libre para volumen |
+| RF-11 | **Cuatro pantallas en bucle** con arriba/abajo del joystick | Debe | Arriba y abajo recorren: sin letra → con letra → portada → elegir playlist → y vuelta a empezar. El modo elegido sobrevive a un reinicio | 🔲 Pendiente |
+| RF-12 | **Modo sin letra**: canción y artista en grande | Debe | Título y artista ocupan el centro con tipografía mayor que hoy. La barra de la playlist se conserva arriba, y la pausa se sigue viendo | 🔲 Pendiente |
+| RF-13 | **Modo portada**: la carátula del álbum a pantalla completa | Debe | Al cambiar de canción, la portada aparece en < 6 s. Si no se puede descargar, se degrada al modo con letra sin quedarse en negro | 🔲 Pendiente |
+| RF-14 | **Elegir playlist desde el aparato** | Debe | Se ven las playlists con su imagen; izquierda/derecha navega y el clic la reproduce en < 3 s | 🔲 Pendiente |
+| RF-15 | **Pantalla oculta de estado** | Podría | Una combinación poco probable del joystick la abre. Muestra el estado del aparato (RAM, WiFi, versión, tiempo encendido) | 🔲 Pendiente |
+| RF-16 | **Que encontrarla sea un regalo, no un susto** | Debe | Al abrirse, una animación de sorpresa y un texto que tranquiliza: que no se preocupe, que basta un clic para salir y puede seguir usándolo. Al salir muestra **"Te quiero!!"** | 🔲 Pendiente |
 
 ## Requerimientos no funcionales
 
@@ -144,6 +150,10 @@ que el proyecto pueda terminarse:
 | 2026-08-29 | S-05 resuelto — **los 9 supuestos cerrados**. ADR-0003 aceptado (LRCLIB) | La API verificada con consultas reales. La canción que parecía faltar sí estaba: el fallo era la duración |
 | 2026-08-29 | **RF-06 y RF-07 ✅ HECHOS · RNF-02 verificado.** Registrado que el proyecto será un regalo | Todas las verificaciones visuales pasaron |
 | 2026-08-29 | **RF-04 ✅ HECHO** — letras sincronizadas funcionando y confirmadas mirando. RNF-05 verificado | Cierre de sesión |
+| 2026-08-30 | **Añadidos RF-11 a RF-16** (cuatro modos, sin letra, portada, selector de playlists, pantalla oculta y su sorpresa) | Nuevos requerimientos tras conseguir el joystick |
+| 2026-08-30 | **RF-08 y RF-09 suben de "Podría" a "Debe"** | Ya hay hardware de entrada: el joystick C-005 |
+| 2026-08-30 | **RF-10 (volumen) ⬜ DESCARTADO** | Los dos ejes del joystick están comprometidos. Ver [ADR-0007](../1-decisiones/ADR-0007-joystick-como-control.md) |
+| 2026-08-30 | **RF-08, RF-11, RF-12, RF-13, RF-14 ✅ HECHOS.** RF-09 🟡 parcial (mediana 1,5 s, picos de 5 s) | Sesión del joystick y los modos |
 | 2026-08-29 | RF-01, RF-02, RF-03 y RF-05 ✅ HECHOS | La pantalla muestra canción, artista, álbum y progreso, en vivo |
 | 2026-08-29 | RNF-01 resuelto (fuente 4). El texto disponible baja a ~17 car. × 9 líneas | Medición perceptual en la pantalla real. Casi la mitad de lo estimado con fuente 8×16: aprieta el RF-04 |
 | 2026-08-29 | RF-01/02/03/05/06 con datos funcionando; riesgo de certificados mitigado | El ESP32 lee Spotify con certificado verificado. ADR-0009 cerrado |

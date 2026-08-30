@@ -13,6 +13,8 @@ con su razonamiento original intacto.
 | [0008](ADR-0008-libreria-de-pantalla.md) | Usar `TFT_eSPI`, configurada desde `platformio.ini` | ✅ `Aceptado` | 2026-08-29 |
 | [0009](ADR-0009-certificados-raiz.md) | Incrustar el paquete de CAs de Mozilla, no un certificado suelto | ✅ `Aceptado` | 2026-08-29 |
 | [0010](ADR-0010-permisos-de-spotify.md) | Pedir permisos de lectura **y control** desde el inicio | ✅ `Aceptado` | 2026-08-29 |
+| [0007](ADR-0007-joystick-como-control.md) | Un **joystick analógico de 2 ejes** como único control (y sin volumen) | ✅ `Aceptado` | 2026-08-30 |
+| [0011](ADR-0011-imagenes-en-pantalla.md) | JPEG por bloques, solo la versión de **300 px**, y **sin guardarla** | ✅ `Aceptado` | 2026-08-30 |
 
 ## Decisiones que faltan por tomar
 
@@ -23,7 +25,7 @@ suficiente:
 |---|---|---|
 | ADR-0005 | Alimentación: ¿USB o batería? | Definir si el aparato se mueve de lugar o vive enchufado |
 | ADR-0006 | Cómo se guardan las credenciales de WiFi y Spotify | ✅ Resuelto en la práctica: `secrets.h` + `.gitignore` |
-| ADR-0007 | Cómo se interactúa con el Tamagotchi (botones, encoder, touch) | Definir qué hace además de mostrar la canción |
+| ~~ADR-0007~~ | ~~Cómo se interactúa con el Tamagotchi~~ | ✅ **Decidido el 2026-08-30**: [joystick de 2 ejes](ADR-0007-joystick-como-control.md) |
 
 ---
 

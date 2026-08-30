@@ -112,14 +112,21 @@ mirando la pantalla. `/cerrar-sesion` captura eso; las genéricas no.
 
 ## Estado actual
 
-🟢 **El Tamagotchi está terminado y verificado.** Muestra en pantalla la canción,
-artista, álbum, playlist, progreso y **letras sincronizadas**, con el certificado
-de Spotify verificado. El ESP32 lo hace todo solo: se conecta, sincroniza la hora,
-renueva su propio token y dibuja.
+🟢 **El Tamagotchi funciona y ya se puede tocar.** Además de mostrar canción,
+artista, álbum, playlist, progreso y **letras sincronizadas**, ahora tiene un
+**joystick** (C-005) que pausa, salta de canción, recorre **cuatro pantallas** y
+permite **elegir playlist**. El ESP32 lo hace todo solo: se conecta, sincroniza la
+hora, renueva su propio token, descarga carátulas y las dibuja.
 
-**10 de 13 requerimientos cumplidos.** Los 3 que faltan son los controles de
-reproducción (RF-08/09/10), de prioridad "Podría" y fuera de la v1 a propósito.
-Todas las verificaciones visuales pasaron el 2026-08-29.
+**Las cuatro pantallas** (arriba/abajo, en bucle, con fundido entre ellas):
+sin letra · con letra · portada del álbum · elegir playlist.
+
+**14 de 16 requerimientos.** Faltan **RF-15 y RF-16**: la pantalla oculta de
+estado con su animación de sorpresa. RF-10 (volumen) quedó **descartado** — el
+joystick no tiene eje libre, decidido en el [ADR-0007](proyectos/tamagotchi/1-decisiones/ADR-0007-joystick-como-control.md).
+
+⚠️ **Hay verificaciones visuales pendientes** de la sesión del 2026-08-30: están
+listadas en el bloque `🔚 Cierre de sesión` de la bitácora.
 
 ### 🎁 Va a ser un regalo — cambia las prioridades
 
@@ -141,6 +148,13 @@ puede depurarlo ni reiniciarlo a conciencia:
 **Arquitectura del firmware:** tres hilos —Spotify (rápido), letras (lento) y
 dibujo—, con un mutex de red que garantiza **una sola conexión cifrada a la vez**.
 Ver [`6-esquemas/mapa-de-memoria.md`](proyectos/tamagotchi/6-esquemas/mapa-de-memoria.md).
+
+🔑 **La regla que ordena todo el firmware:** el núcleo 0 habla con la red, el
+núcleo 1 dibuja, y **nunca al revés**. El joystick se lee en el núcleo 1 y deja
+una nota en una cola; el núcleo 0 la recoge y la cumple cuando le toca turno. Las
+imágenes las baja el 0 y las pinta el 1. Cada resultado que tarda en llegar lleva
+una marca de a quién pertenece — sin ella, lo lento acaba dibujado en el sitio
+equivocado.
 
 Antes de dar por hecho cualquier estado, compruébalo:
 

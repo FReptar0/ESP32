@@ -193,3 +193,100 @@ Verificado con la frase que fallaba:
 🔑 **Cuando los elementos son de tamaño muy variable, darle a cada uno un hueco
 fijo desperdicia y se queda corto A LA VEZ.** Un almacén común se adapta solo: lo
 que no gasta una línea corta queda disponible para una larga.
+
+---
+
+## 4. 🕳️ La canción que sonaba entera sin letra
+
+- **Fecha:** 2026-08-29
+- **Reportado:** *"una canción pasó completa sin letra, antes no pasaba. La repetí tres veces y nada, pero sí tiene letra y la encontré en LRCLIB"*
+- **Confianza:** alta — capturado en el registro del puerto serie antes y después del arreglo.
+
+### El síntoma tenía dos mitades, y la segunda despistaba
+
+Que una búsqueda falle es normal. Lo raro era que **repetir la canción no
+arreglaba nada**. Eso descartaba "LRCLIB tuvo un mal momento" y apuntaba a que
+el aparato ni siquiera lo estaba intentando.
+
+Y así era. La búsqueda solo se encola cuando cambia el par «título|artista»:
+
+```cpp
+String clave = String(titulo) + "|" + String(artista);
+if (clave != claveActual) { … encolar búsqueda … }
+```
+
+Repetir la misma canción **no cambia la clave**. Así que si la primera búsqueda
+se pierde, no hay segunda oportunidad mientras esa canción siga sonando.
+
+### La causa: la precarga apagaba la búsqueda de otro
+
+Capturado en vivo, con el firmware anterior:
+
+```
+20:03:49  [Precarga] siguiente: SAME SH!T          ← empieza a precargar
+20:03:50  🎵 Chest Pain (I Love) — Malcolm Todd    ← cambia la canción
+20:03:50  [Letra] buscando: Chest Pain (I Love)    ← se encola SU búsqueda
+20:03:54  [Letra] exacta -> HTTP 200 ✅
+20:03:54  [Precarga] lista (53 líneas)             ← y aquí se acaba todo
+```
+
+No hay línea `[Letra] ✅` para *Chest Pain*. Sonó 20 segundos sin letra.
+
+El código tenía la protección **a medias**:
+
+```cpp
+if (generacion != miGen && !esPre) {
+  // "no se toca `fase` porque ya está apuntando al trabajo nuevo"
+} else if (terminado) {
+  fase = FASE_NADA;        // ← pero la PRECARGA sí lo tocaba
+```
+
+El razonamiento del primer `if` era correcto; el `&& !esPre` lo dejaba sin
+aplicar justo en el caso que hacía falta. Cuando una precarga terminaba **después**
+de un cambio de canción, ese `fase = FASE_NADA` borraba la búsqueda que la
+canción nueva acababa de encolar.
+
+### El arreglo
+
+Una línea: apagar la máquina solo si sigue apuntando a nuestro trabajo.
+
+```cpp
+if (generacion == miGen) fase = FASE_NADA;
+```
+
+### Verificado provocando la carrera a propósito
+
+Saltando canciones por la API de Spotify a distintos ritmos (4 s, 8 s y 10 s)
+hasta caer dentro de la ventana:
+
+```
+20:12:35  [Precarga] siguiente: Just the Two of Us
+20:12:35  🎵 Just the Two of Us                      ← el cambio, a la vez
+20:12:35  [Letra] buscando: Just the Two of Us (443s)
+20:12:40  [Precarga] lista (85 líneas)               ← la precarga termina DESPUÉS
+20:12:45  [Letra] ✅ (85 líneas)                     ← y la búsqueda sobrevive
+```
+
+Misma secuencia que fallaba, ahora con su `[Letra] ✅`. En ~20 saltos no quedó
+ninguna canción sin letra.
+
+### Las lecciones
+
+🔑 **Al apagar una máquina de estados compartida, comprueba que sigue apuntando
+al trabajo que hiciste tú.** Si otro la reprogramó mientras tanto, apagarla es
+borrarle el encargo. Es el mismo error que la «letra de la canción anterior» del
+punto 2 —y se arregla con la misma marca de agua—, pero en el sentido contrario:
+allí se publicaba un resultado caducado, aquí se descartaba uno vigente.
+
+🔑 **Una condición añadida a una protección (`&& !esPre`) es una excepción, y las
+excepciones hay que justificarlas.** Aquí dejaba fuera precisamente el caso que
+la protección necesitaba cubrir.
+
+🔑 **"Repetirlo no lo arregla" es un dato, no una queja.** Si reintentar no
+cambia nada, el fallo no está en la operación: está en que no se reintenta.
+
+### Lo que queda abierto
+
+Si una búsqueda se pierde por cualquier otro motivo, **repetir la canción sigue
+sin reintentarla** — la clave «título|artista» no cambia. Hoy no se ha visto
+ocurrir con el arreglo puesto, pero el agujero sigue ahí.

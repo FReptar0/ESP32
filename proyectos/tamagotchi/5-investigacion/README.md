@@ -30,6 +30,67 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-30 — La caché de la portada: probada, medida y descartada
+
+**Qué se preguntó:** por qué hay que rebajar la carátula al volver al modo.
+**Qué se probó:** guardarla en memoria (6–57 KB, mediana 30).
+**Por qué se quitó:** el bloque contiguo mayor cayó de 110 KB a **45 KB clavado**
+—memoria libre había, continuidad no— y la válvula de seguridad provocó un
+vaivén de soltar-y-rebajar que congelaba la pantalla 400 ms cada vez. Era el
+"parpadeo" que se estaba reportando.
+**Cómo se resolvió:** instrumentando el ritmo del bucle. `medio 5 ms · peor
+444 ms` correlacionó exactamente con `[Portada] dibujada en 437 ms`.
+→ [`portada-cache-descartada.md`](portada-cache-descartada.md)
+
+### 2026-08-29 — Los controles del joystick: dos hipótesis falsas y una medición
+
+**Qué se buscaba:** que pausar y saltar respondieran en menos de 2 s (RF-08/09).
+**Lo que falló dos veces:** creer que se perdían órdenes (cierto, pero no era la
+causa) y culpar a la precarga de letras (falso: al silenciarla EMPEORÓ).
+**Lo que lo resolvió:** desglosar cada orden en cola / turno de red / petición.
+Suelo de ~1 s por el viaje a Spotify; el caso típico ya cumplía; los picos de 6 s
+son colisiones con `consultar()`, que encadena dos peticiones sin soltar el turno.
+**La decisión:** no tocar más el reparto de red —ahí se rompió el aparato ese
+mismo día— y atacar la percepción con un spinner que aparece en < 20 ms.
+→ [`controles-joystick-latencia.md`](controles-joystick-latencia.md)
+
+### 2026-08-29 — Auditoría antes de añadir nada: 5 fallos, 2 de ellos rompían el regalo
+
+**Por qué:** comprobar que lo que hay aguanta antes de abrir requerimientos nuevos.
+**Lo grave:** la renovación del token saltaba el mutex de red (la condición exacta
+de los 11 reinicios), y no existía ninguna pantalla para "hay WiFi pero Spotify no
+responde" — el aparato se quedaba con la canción de hace horas congelada, para
+siempre. **Los cinco arreglados.**
+**Verificado en placa:** la pantalla ámbar "Sin Spotify", provocando el fallo a
+propósito con un token roto. Lo demás, lo que se podía.
+→ [`auditoria-2026-08-29.md`](auditoria-2026-08-29.md)
+
+### 2026-08-29 — Una canción sonaba entera sin letra: la precarga borraba su búsqueda
+
+**Qué se observó:** *"la repetí tres veces y nada, pero sí tiene letra"*. Esa
+segunda mitad era la pista: si reintentar no cambia nada, es que no se reintenta.
+**Causa:** una precarga que terminaba **después** de un cambio de canción hacía
+`fase = FASE_NADA` y borraba la búsqueda recién encolada. La protección existía
+pero llevaba `&& !esPre`, que dejaba fuera justo ese caso.
+**Arreglo:** `if (generacion == miGen) fase = FASE_NADA;` — una línea.
+**Confianza:** alta — capturado en el registro antes y después, provocando la
+carrera a propósito con saltos de canción por la API.
+→ [`concurrencia-y-carreras.md` §4](concurrencia-y-carreras.md)
+
+### 2026-08-29 — Tardar en decir "sin letra" no se puede arreglar encadenando
+
+**Qué se observó:** una canción sin letra tarda ~9,3 s en rendirse. Medido: cada
+petición HTTPS cuesta ~4 s, y **son de abrir la conexión, no de descargar** — la
+prueba es que un 404 sin contenido tardó 4151 ms.
+**Qué se intentó:** reutilizar la conexión entre peticiones. **Empeoró el
+aparato y se revirtió**: encadenar peticiones deja el hilo de red ocupado, y con
+él el aparato ciego a los cambios de canción.
+**También verificado:** la API de Spotify **no** dice si una canción tiene letra
+—ni campo ni endpoint, ni en los changelogs de 2026.
+**Confianza:** alta (medido en la placa + documentación oficial).
+→ [`por-que-tarda-en-decir-sin-letra.md`](por-que-tarda-en-decir-sin-letra.md)
+
+
 ### 2026-08-29 — Las playlists privadas devuelven 404 sin el permiso adecuado
 
 **Qué se observó:** `[Contexto] HTTP 404 -> ""` al reproducir desde una playlist
