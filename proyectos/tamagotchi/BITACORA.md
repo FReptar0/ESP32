@@ -15,7 +15,7 @@ fallaron, las horas perdidas, las sospechas sin confirmar. Las *decisiones* van 
 | | |
 |---|---|
 | Placa | ESP32-D0WD-V3 · MAC `84:1F:E8:2C:3E:C4` · `/dev/cu.usbserial-0001` |
-| Firmware cargado | La placa dice **`822aed1`**, sin `+cambios`: coincide con `HEAD`. Todo commiteado y cargado. *Verificado preguntándoselo a la placa.* |
+| Firmware cargado | La placa dice **`822aed1`**, sin `+cambios`. ⚠️ `HEAD` es posterior (**`1d93ad0`**), pero **NO hace falta recargar**: los commits de después tocan solo documentación y skills. Comprobado con `git diff --stat 822aed1 HEAD -- proyectos/tamagotchi/firmware/` → sin cambios. *Verificado el 2026-08-30 antes de cerrar.* |
 | Cableado | GMT130 según [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md) **+ joystick C-005** según [`6-esquemas/conexiones-joystick.md`](6-esquemas/conexiones-joystick.md) |
 | Al cerrar | **Encendida y funcionando**, en el selector con las **3 playlists** cargadas |
 | Puerto serie | Libre, sin procesos colgados |
