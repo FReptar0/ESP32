@@ -15,6 +15,8 @@ con su razonamiento original intacto.
 | [0010](ADR-0010-permisos-de-spotify.md) | Pedir permisos de lectura **y control** desde el inicio | ✅ `Aceptado` | 2026-08-29 |
 | [0007](ADR-0007-joystick-como-control.md) | Un **joystick analógico de 2 ejes** como único control (y sin volumen) | ✅ `Aceptado` | 2026-08-30 |
 | [0011](ADR-0011-imagenes-en-pantalla.md) | JPEG por bloques, solo la versión de **300 px**, y **sin guardarla** | ✅ `Aceptado` | 2026-08-30 |
+| [0012](ADR-0012-combinacion-secreta.md) | La pantalla oculta se abre con **`↑↑↓↓`**, la mitad del Código Konami | ✅ `Aceptado` | 2026-08-30 |
+| [0013](ADR-0013-animacion-de-carga.md) | La animación de carga va en **fotogramas de 1 bit**, no reproduciendo el GIF | ✅ `Aceptado` | 2026-08-30 |
 
 ## Decisiones que faltan por tomar
 

@@ -20,6 +20,7 @@
 #include <Preferences.h>
 #include "fuentes.h"
 #include "iconos.h"
+#include "snoopy.h"
 #include "letras.h"
 
 extern const uint8_t rootca_crt_bundle_start[] asm("_binary_data_cert_x509_crt_bundle_bin_start");
@@ -275,8 +276,14 @@ SemaphoreHandle_t mutexRed;
 volatile uint32_t generacion = 0;
 
 #define CON_RED(bloque) do { \
-  if (xSemaphoreTake(mutexRed, portMAX_DELAY) == pdTRUE) { bloque; \
-    xSemaphoreGive(mutexRed); } } while (0)
+  if (xSemaphoreTake(mutexRed, pdMS_TO_TICKS(15000)) != pdTRUE) { \
+    Serial.printf("[TURNO] red: 15s esperando · nucleo %d · linea %d\n", \
+                  xPortGetCoreID(), __LINE__); \
+    xSemaphoreTake(mutexRed, portMAX_DELAY); \
+    Serial.printf("[TURNO] red: por fin · linea %d\n", __LINE__); \
+  } \
+  bloque; \
+  xSemaphoreGive(mutexRed); } while (0)
 String tituloAct, artistaAct;
 volatile bool pedirRedibujado = false;   // el núcleo 0 avisa al 1
 
@@ -311,9 +318,41 @@ int    candidatoActual = 0;
 String claveObj, tObj, aObj, alObj; // la canción que se está buscando
 long   dObj = 0;
 
+/* ⏱ EL CHIVATO DEL TURNO — se queda. No es codigo de depuracion suelto.
+ *
+ *  Se puso el 2026-08-30 para cazar un cuelgue, y lo cazo al tercer
+ *  intento. Se conserva porque su valor no era encontrar AQUEL fallo,
+ *  sino que un cuelgue deje de ser invisible: antes el aparato se
+ *  quedaba mudo y no habia forma de saber si era un bloqueo o memoria
+ *  pisada. Ahora dice quien espera, en que nucleo y en que linea.
+ *
+ *  🔑 Es la regla del regalo aplicada al diagnostico: degradar, no
+ *     romper. Cuesta cero cuando todo va bien y convierte un silencio
+ *     en una respuesta cuando no.
+ *
+ *  El comportamiento es IDENTICO al de antes: si se agota el plazo se
+ *  sigue esperando para siempre, igual que hacia `portMAX_DELAY`. Lo
+ *  unico que cambia es que ANTES de quedarse mudo, avisa de quien
+ *  espera, en que nucleo y en que linea.
+ *
+ *  Sin esto el abrazo mortal y la memoria pisada son indistinguibles:
+ *  los dos se ven igual desde fuera, un silencio. Con esto se separan.
+ *
+ *  El plazo del turno de DATOS es corto (3 s) porque ese turno se
+ *  suelta en microsegundos. El de RED es largo (15 s) porque ahi 6 s
+ *  de espera son NORMALES —medido en controles-joystick-latencia.md—
+ *  y un plazo corto solo daria falsas alarmas.
+ *
+ *  Ver `5-investigacion/cuelgue-por-turno-anidado.md`. */
 #define CON_DATOS(bloque) do { \
-  if (xSemaphoreTake(mutexDatos, portMAX_DELAY) == pdTRUE) { bloque; \
-    xSemaphoreGive(mutexDatos); } } while (0)
+  if (xSemaphoreTake(mutexDatos, pdMS_TO_TICKS(3000)) != pdTRUE) { \
+    Serial.printf("[TURNO] datos: 3s esperando · nucleo %d · linea %d\n", \
+                  xPortGetCoreID(), __LINE__); \
+    xSemaphoreTake(mutexDatos, portMAX_DELAY); \
+    Serial.printf("[TURNO] datos: por fin · linea %d\n", __LINE__); \
+  } \
+  bloque; \
+  xSemaphoreGive(mutexDatos); } while (0)
 String estadoPintado;
 
 /* ------------------------------------------------------------
@@ -349,6 +388,75 @@ Joystick joystick;
 enum Modo { MODO_SIN_LETRA, MODO_CON_LETRA, MODO_PORTADA, MODO_PLAYLISTS, N_MODOS };
 int  modo = MODO_CON_LETRA;
 bool repintarModo = false;      // el núcleo 1 lo levanta al cambiar
+
+/* ============================================================
+ *  La pantalla oculta y su combinación secreta (RF-15 / RF-16)
+ * ============================================================
+ *  `↑ ↑ ↓ ↓` — la mitad del Código Konami. Ver ADR-0012.
+ *
+ *  ⚠️ NO es un modo más. Vive fuera del bucle de `N_MODOS`:
+ *
+ *     1. Dentro del bucle dejaría de estar escondida: se llegaría
+ *        empujando arriba cuatro veces.
+ *     2. NO se guarda en NVS. Si se guardara y el aparato se
+ *        reiniciara solo, quien lo recibió despertaría en una
+ *        pantalla de diagnóstico sin música y sin saber salir.
+ *
+ *  🔑 Un estado excepcional no se persiste. Lo que sobrevive a un
+ *     reinicio debe ser algo en lo que sea razonable despertar.
+ * ============================================================ */
+bool pantallaOculta = false;      // ¿se está mostrando ahora?
+bool abrirOculta = false;         // el detector lo levanta; el dibujo lo cumple
+bool cerrarOculta = false;
+int  modoAntesDeOculta = MODO_CON_LETRA;
+unsigned long ultimoRefrescoOculta = 0;
+
+/* Solo puede usar gestos que NO pidan nada a la red (arriba y abajo):
+ * así el detector vive entero en el núcleo del dibujo.
+ *
+ * ⚠️ Que la secuencia sea invisible depende de que `N_MODOS` sea 4:
+ *    subir dos y bajar dos vuelve a la pantalla de partida. */
+const Gesto COMBINACION_SECRETA[] = { GESTO_ARRIBA, GESTO_ARRIBA,
+                                      GESTO_ABAJO,  GESTO_ABAJO };
+const int PASOS_SECRETOS = sizeof(COMBINACION_SECRETA) / sizeof(COMBINACION_SECRETA[0]);
+
+/* Cuánto se puede tardar de un gesto al siguiente sin perder la racha.
+ *
+ * ⚠️ La primera versión puso 1200 ms **suponiendo** que bastaba. Se
+ *    probó en la placa el 2026-08-30 y NO bastó: la secuencia entera
+ *    se hizo bien y no se abrió nada, porque entre el tercer gesto y
+ *    el cuarto pasaron más de 3 s. Un plazo que nadie alcanza no
+ *    protege de nada: solo hace la función inalcanzable.
+ *
+ * 🔑 Este número no se puede razonar, hay que medirlo con la mano de
+ *    alguien. Por eso cada paso escribe cuánto tardó: el `[Secreto]`
+ *    del registro es lo que permite ajustarlo con datos. */
+const unsigned long MS_ENTRE_PASOS_SECRETOS = 2000;
+
+int  pasoSecreto = 0;
+unsigned long ultimoPasoSecreto = 0;
+
+bool avanzarCombinacion(Gesto g) {
+  unsigned long hueco = millis() - ultimoPasoSecreto;
+  if (pasoSecreto > 0 && hueco > MS_ENTRE_PASOS_SECRETOS) {
+    Serial.printf("[Secreto] racha rota: %lu ms desde el paso %d\n", hueco, pasoSecreto);
+    pasoSecreto = 0;
+  }
+  ultimoPasoSecreto = millis();
+
+  if (g == COMBINACION_SECRETA[pasoSecreto]) {
+    pasoSecreto++;
+    Serial.printf("[Secreto] paso %d de %d (+%lu ms)\n", pasoSecreto, PASOS_SECRETOS, hueco);
+    if (pasoSecreto == PASOS_SECRETOS) { pasoSecreto = 0; return true; }
+    return false;
+  }
+
+  /* Un gesto que rompe la racha puede ser el PRIMERO de un intento
+   * nuevo. Sin esto, `↑↑↑↓↓` no abriría nada — y eso es justo lo que
+   * hace quien se pasa de pantalla y corrige. */
+  pasoSecreto = (g == COMBINACION_SECRETA[0]) ? 1 : 0;
+  return false;
+}
 
 inline const char* nombreModo(int m) {
   switch (m) {
@@ -1017,13 +1125,36 @@ void pintarSelectorListas() {
   }
 }
 
-// Repinta lo fijo del modo actual. Se llama al cambiar de modo y al
-// cambiar de canción.
+/* Repinta lo fijo del modo actual. Se llama al cambiar de modo y al
+ * cambiar de canción.
+ *
+ * ⚠️ HAY QUE LLAMARLA CON EL TURNO DE DATOS COGIDO. Lee `tituloAct`,
+ *    `artistaAct` y `listas[]`, que los escribe el núcleo 0.
+ *
+ * ⚠️ Y JUSTO POR ESO LA PORTADA NO SE DIBUJA AQUÍ.
+ * ------------------------------------------------------------
+ *  `pintarPortada()` pide el turno de datos por su cuenta, a través de
+ *  `imagenQueTocaAhora()`. Llamarla desde aquí significaba pedir el
+ *  turno **dos veces desde el mismo núcleo** — y el turno se crea con
+ *  `xSemaphoreCreateMutex()`, que NO es reentrante: el núcleo se queda
+ *  esperándose a sí mismo, para siempre, porque la espera es
+ *  `portMAX_DELAY`.
+ *
+ *  El aparato entero se colgaba en silencio: sin reinicio, sin
+ *  `Guru Meditation`, sin nada. Solo pasaba al entrar en el modo
+ *  portada teniendo ya una imagen en memoria, por eso tardó en salir.
+ *  Diagnosticado el 2026-08-30 poniéndole un plazo al turno; ver
+ *  `5-investigacion/cuelgue-por-turno-anidado.md`.
+ *
+ *  🔑 Una función que pide un turno no se puede llamar desde dentro de
+ *     ese turno. Y lo difícil es que aquí **no se veía**: la petición
+ *     estaba dos llamadas más abajo.
+ * ------------------------------------------------------------ */
 void pintarContenidoModo() {
   switch (modo) {
     case MODO_SIN_LETRA: cabeceraGrande(tituloAct, artistaAct); break;
     case MODO_CON_LETRA: cabecera(tituloAct.c_str(), artistaAct.c_str()); break;
-    case MODO_PORTADA:   pintarPortada(); break;
+    case MODO_PORTADA:   break;          // se dibuja FUERA del turno
     default:             pintarSelectorListas(); break;
   }
 }
@@ -1241,6 +1372,321 @@ void pantallaMensaje(const char* l1, const char* l2, uint16_t color) {
   if (l2) escribir(l2, 140, false, GRIS);
 }
 
+/* ============================================================
+ *  La pantalla de carga: Snoopy bailando
+ * ============================================================
+ *  Sustituye al "Tamagotchi / conectando al WiFi..." de antes.
+ *
+ *  Fondo BLANCO y tinta negra, al revés que el resto del aparato.
+ *  Es deliberado: Snoopy está dibujado como línea negra sobre papel,
+ *  y invertirlo le vuelve la oreja blanca — se ve como un negativo.
+ *
+ *  Los cuadros viven en `snoopy.h`, a 1 bit por píxel. En color
+ *  serían 56 KB cada uno y no cabrían siete; así son 3,4 KB. No se
+ *  pierde nada porque el dibujo YA es de dos tonos.
+ *  Ver `tools/gen-animacion.py`.
+ *
+ *  🔑 Y de paso deja de ser un adorno: si la animación se para, se ve
+ *     al instante que el arranque se atascó. Un texto fijo no dice
+ *     nada — no se distingue "esperando" de "colgado".
+ * ============================================================ */
+const int SNOOPY_X = (240 - SNOOPY_ANCHO) / 2;
+const int SNOOPY_Y = 8;
+const int Y_TEXTO_CARGA = 206;
+
+int cuadroSnoopy = 0;
+unsigned long ultimoCuadroSnoopy = 0;
+
+/* ¿Seguimos en la pantalla de carga?
+ *
+ * ⚠️ No basta con animar durante `setup()`. Cuando `setup()` termina,
+ *    el núcleo 0 todavía está haciendo su PRIMERA consulta a Spotify,
+ *    y eso es casi un segundo más con Snoopy congelado en pantalla.
+ *    Un fotograma quieto se lee como "se colgó" — que es justo lo que
+ *    esta animación existe para desmentir.
+ *
+ * 🔑 La animación no acompaña al arranque: acompaña a la ESPERA. Y la
+ *    espera no termina donde termina `setup()`, sino cuando hay algo
+ *    que enseñar. */
+bool enCarga = true;
+
+/* ⚠️ No se usa `tft.drawBitmap()`. El de la librería llama a
+ *    `drawPixel` una vez por punto, y aquí son 27.968 puntos: cada
+ *    uno abre su propia ventana de direcciones en el bus. Tardaría
+ *    más que los 110 ms que dura el cuadro, y la animación iría a
+ *    tirones justo cuando debe demostrar que el aparato está vivo.
+ *
+ *    Volcando fila a fila se manda una tirada de 152 píxeles por
+ *    transacción: ~11 ms el cuadro entero.
+ *
+ * 🔑 Dibujar punto por punto no cuesta por los puntos: cuesta por
+ *    abrir el bus una vez por cada uno. */
+void dibujarCuadroSnoopy(int n) {
+  const int bytes_fila = (SNOOPY_ANCHO + 7) / 8;
+  const uint8_t* cuadro = SNOOPY[n];
+  uint16_t linea[SNOOPY_ANCHO];
+
+  tft.startWrite();
+  tft.setAddrWindow(SNOOPY_X, SNOOPY_Y, SNOOPY_ANCHO, SNOOPY_ALTO);
+  for (int y = 0; y < SNOOPY_ALTO; y++) {
+    const uint8_t* f = cuadro + y * bytes_fila;
+    for (int x = 0; x < SNOOPY_ANCHO; x++)
+      linea[x] = (f[x >> 3] & (0x80 >> (x & 7))) ? TFT_BLACK : TFT_WHITE;
+    tft.pushColors(linea, SNOOPY_ANCHO, true);
+  }
+  tft.endWrite();
+}
+
+/* Cambia SOLO el renglón de abajo. Los tres pasos del arranque
+ * comparten pantalla; repintarla entera en cada uno haría parpadear a
+ * Snoopy tres veces sin ninguna razón. */
+void textoCarga(const char* texto) {
+  tft.fillRect(0, Y_TEXTO_CARGA, 240, ALTO_CHICA + 6, TFT_WHITE);
+  usarFuente(false);
+  tft.setTextColor(GRIS_OSCURO, TFT_WHITE);   // ⚠️ fondo blanco, no negro
+  tft.setTextDatum(TC_DATUM);
+  tft.drawString(texto, 120, Y_TEXTO_CARGA);
+}
+
+/* El token inicial se pide desde el NÚCLEO 0, no desde el del dibujo.
+ *
+ * ⚠️ La primera versión lo pedía dentro de `setup()`, que corre en el
+ *    núcleo 1. `renovarToken()` abre una conexión cifrada y bloquea
+ *    1-2 s, así que Snoopy se quedaba congelado justo antes de abrir
+ *    la pantalla — y se veía como si el aparato se hubiera colgado.
+ *
+ *    Y era una excepción sin motivo a la regla que ordena todo este
+ *    firmware: el núcleo 0 habla con la red, el 1 dibuja, y nunca al
+ *    revés. El arranque no tenía por qué saltársela.
+ *
+ * 🔑 Una animación que existe para decir "sigo vivo" no puede pararse
+ *    por culpa de la espera que venía a disimular.
+ *
+ * La tarea se borra sola al acabar: solo hace falta una vez. */
+volatile bool tokenInicialListo = false;
+bool renovarToken();            // vive más abajo, con las demás peticiones
+
+void tareaTokenInicial(void*) {
+  renovarToken();
+  tokenInicialListo = true;
+  vTaskDelete(NULL);
+}
+
+void pantallaCarga(const char* texto) {
+  tft.fillScreen(TFT_WHITE);
+  estadoPintado = ""; lineaPintada = -2;
+  cuadroSnoopy = 0; ultimoCuadroSnoopy = millis();
+  dibujarCuadroSnoopy(0);
+  textoCarga(texto);
+}
+
+/* Se llama DENTRO de las esperas del arranque, no en vez de ellas.
+ * Conectarse al WiFi y pedir la hora bloquean; lo que se hace es
+ * esperar en trozos cortos y aprovechar cada uno para avanzar. */
+void animarCarga() {
+  if (millis() - ultimoCuadroSnoopy < (unsigned long)SNOOPY_MS) return;
+  ultimoCuadroSnoopy = millis();
+  cuadroSnoopy = (cuadroSnoopy + 1) % SNOOPY_CUADROS;
+  dibujarCuadroSnoopy(cuadroSnoopy);
+}
+
+/* ============================================================
+ *  La pantalla oculta (RF-15) y su sorpresa (RF-16)
+ * ============================================================
+ *  El encargo del RF-16 no es "que se vea bonito": es que
+ *  encontrarla sea **un regalo y no un susto**. Quien reciba el
+ *  aparato no sabe programar. Si de pronto se le llena la pantalla
+ *  de números sin explicación, la conclusión razonable es "lo rompí".
+ *
+ *  Por eso el orden: primero la sorpresa (esto ha pasado a
+ *  propósito), luego el texto que tranquiliza, y los números al
+ *  final. Los datos técnicos son lo MENOS importante de esta
+ *  pantalla aunque sean su contenido.
+ * ============================================================ */
+const uint16_t ROSA_CORAZON = 0xFB56;
+
+// El corazón de `iconos.h` es de tamaño fijo (11 px) porque va dentro
+// de una línea de texto; aquí hace falta que crezca.
+void corazonGrande(int cx, int cy, int s, uint16_t c) {
+  tft.fillCircle(cx - s / 2, cy - s / 2, s / 2 + 1, c);
+  tft.fillCircle(cx + s / 2, cy - s / 2, s / 2 + 1, c);
+  tft.fillTriangle(cx - s, cy - s / 3, cx + s, cy - s / 3, cx, cy + s, c);
+}
+
+/* Tres ondas desde el centro y un corazón que crece.
+ *
+ * ⚠️ Con círculos, NO con una imagen. Una animación en mapa de bits
+ *    necesitaría decenas de KB, y este aparato ya demostró que no le
+ *    sobran (`portada-cache-descartada.md`). Un círculo cuesta cero.
+ *
+ * El anillo se borra a su paso en vez de limpiar la pantalla entera
+ * en cada paso: 240x240 son 57.600 píxeles por fotograma y se vería
+ * parpadear; un anillo son unos cientos. */
+void animacionSorpresa() {
+  tft.fillScreen(TFT_BLACK);
+  for (int onda = 0; onda < 3; onda++) {
+    for (int r = 6; r < 168; r += 9) {
+      tft.drawCircle(120, 120, r, VERDE_SPOTIFY);
+      if (r > 15) tft.drawCircle(120, 120, r - 9, TFT_BLACK);
+      delay(4);
+    }
+    tft.drawCircle(120, 120, 159, TFT_BLACK);
+    tft.drawCircle(120, 120, 168, TFT_BLACK);
+  }
+  for (int s = 3; s <= 26; s += 2) { corazonGrande(120, 116, s, ROSA_CORAZON); delay(16); }
+  delay(240);
+}
+
+// `123456` -> `1h 23m`. Sin segundos: cambian todo el rato y distraen.
+String tiempoEncendido() {
+  unsigned long s = millis() / 1000;
+  unsigned long h = s / 3600, m = (s % 3600) / 60;
+  if (h > 0) return String(h) + "h " + String(m) + "m";
+  if (m > 0) return String(m) + "m";
+  return String(s) + "s";
+}
+
+/* ⚠️ El valor se borra con un rectángulo antes de escribirlo. El fondo
+ *    del texto NO basta cuando el valor ENCOGE: al pasar de `178 KB` a
+ *    `99 KB`, alineado a la derecha, el sobrante del número viejo se
+ *    queda por la izquierda y se lee `8199 KB`. */
+const int X_VALOR = 118;
+
+void filaValor(const String& valor, int y) {
+  tft.fillRect(X_VALOR, y, 240 - MARGEN - X_VALOR, ALTO_CHICA, TFT_BLACK);
+  usarFuente(false);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextDatum(TR_DATUM);
+  tft.drawString(valor, 240 - MARGEN, y);
+  tft.setTextDatum(TC_DATUM);
+}
+
+void filaEstado(const char* etiqueta, const String& valor, int y) {
+  usarFuente(false);
+  tft.setTextColor(GRIS, TFT_BLACK);
+  tft.setTextDatum(TL_DATUM);
+  tft.drawString(etiqueta, MARGEN, y);
+  tft.setTextDatum(TC_DATUM);
+  filaValor(valor, y);
+}
+
+/* ⚠️ La última fila acaba en 236 de 240. No caben más: si se añade un
+ *    dato hay que quitar otro, no apretar el espaciado. */
+const int Y_TITULO_OCULTA = 10;
+const int Y_CALMA_1 = 42, Y_CALMA_2 = 62;
+const int Y_LINEA_ARRIBA = 88;
+const int Y_WIFI = 96, Y_SENAL = 120, Y_LIBRE = 144,
+          Y_BLOQUE = 168, Y_VERSION = 192, Y_ENCENDIDO = 216;
+
+void pintarPantallaOculta() {
+  tft.fillScreen(TFT_BLACK);
+  estadoPintado = ""; lineaPintada = -2;
+
+  /* ⚠️ Todo el texto fijo de aquí es ASCII a propósito. `escribir()` va
+   *    directo a `drawString`, que NO pasa por `aLatin1()`. La fuente
+   *    está indexada por Latin-1, así que una tilde, una ñ o un `·`
+   *    llegan como DOS bytes y salen dos glifos basura.
+   *
+   * 🔑 Dos textos en la misma pantalla pueden necesitar pinceles
+   *    distintos: el que viene de fuera y el escrito en el código no
+   *    llegan igual. */
+  escribir("Lo encontraste", Y_TITULO_OCULTA, true, VERDE_SPOTIFY);
+  escribir("no rompiste nada", Y_CALMA_1, false, TFT_WHITE);
+  escribir("un clic y vuelves", Y_CALMA_2, false, GRIS);
+  tft.drawFastHLine(MARGEN, Y_LINEA_ARRIBA, 240 - 2 * MARGEN, GRIS_LINEA);
+
+  /* La RAM va en dos números porque son dos cosas distintas:
+   *   - libre  = cuánta queda en total
+   *   - bloque = la mayor pieza SEGUIDA que se puede pedir
+   * Se puede tener 150 KB libres y no poder guardar nada de 50 si
+   * están troceados. El bloque es el que avisa de verdad. */
+  filaEstado("WiFi",      WiFi.isConnected() ? WiFi.SSID() : String("sin conexion"), Y_WIFI);
+  filaEstado("Senal",     String(WiFi.RSSI()) + " dBm",                             Y_SENAL);
+  filaEstado("Libre",     String(ESP.getFreeHeap() / 1024) + " KB",                 Y_LIBRE);
+  filaEstado("Bloque",    String(ESP.getMaxAllocHeap() / 1024) + " KB",            Y_BLOQUE);
+  filaEstado("Version",   String(FW_VERSION),                                     Y_VERSION);
+  filaEstado("Encendido", tiempoEncendido(),                                    Y_ENCENDIDO);
+
+  // Medir en vez de suponer que el texto cabe: `drawString` centrado no
+  // avisa, recorta por los dos lados.
+  static bool medido = false;
+  if (!medido) {
+    medido = true;
+    usarFuente(true); int wt = tft.textWidth("Lo encontraste"); usarFuente(false);
+    Serial.printf("[Oculta] ancho titulo %d px, calma %d/%d px (limite 240)\n",
+                  wt, tft.textWidth("no rompiste nada"), tft.textWidth("un clic y vuelves"));
+  }
+}
+
+/* ⚠️ Volver a llamar a `pintarPantallaOculta()` cada segundo sería lo
+ *    cómodo y estaría mal: limpia y redibuja la pantalla entera, así
+ *    que se vería parpadear. Es el mismo fallo que ya costó una sesión
+ *    con la portada, donde el parpadeo se achacó a un cable flojo.
+ *
+ * 🔑 Repintar de más no es solo lento: se VE. */
+void refrescarValoresOcultos() {
+  filaValor(String(WiFi.RSSI()) + " dBm",                 Y_SENAL);
+  filaValor(String(ESP.getFreeHeap() / 1024) + " KB",     Y_LIBRE);
+  filaValor(String(ESP.getMaxAllocHeap() / 1024) + " KB", Y_BLOQUE);
+  filaValor(tiempoEncendido(),                        Y_ENCENDIDO);
+}
+
+/* El adiós: un corazón y `Te quiero!!` (RF-16). Deja la pantalla en
+ * negro y la luz APAGADA — la vuelve a encender quien llama. */
+void despedida() {
+  fundirBrillo(BRILLO, 0, 110);
+  tft.fillScreen(TFT_BLACK);
+  corazonGrande(120, 96, 26, ROSA_CORAZON);
+  escribir("Te quiero!!", 140, true, TFT_WHITE);
+  fundirBrillo(0, BRILLO, 200);
+  delay(1600);
+  fundirBrillo(BRILLO, 0, 110);
+}
+
+/* Volver de la pantalla oculta: repintar TODO y encender la luz.
+ *
+ * ⚠️ Esto NO puede delegarse en `repintarModo`, que era lo obvio y fue
+ *    el fallo del 2026-08-30. Ese bloque vive dentro de
+ *    `if (claveActual.length() && claveActual[0] != '_')`: si no hay
+ *    canción sonando —en pausa, sin Spotify, en silencio— NO CORRE. Y
+ *    como la despedida deja la luz apagada, la pantalla se quedaba
+ *    negra para siempre y el aparato parecía muerto.
+ *
+ * 🔑 Apagar en un sitio y encender en otro solo vale si el segundo
+ *    corre SIEMPRE. Si tiene condiciones, no vale.
+ *
+ * Por eso aquí se cubren también los estados especiales: es la única
+ * forma de que la luz vuelva pase lo que pase. */
+void volverDeLaPantallaOculta() {
+  bool hayCancion = false;
+  CON_DATOS({
+    if (claveActual == "__sinred__")
+      pantallaMensaje("Sin conexion", "reintentando...", TFT_RED);
+    else if (claveActual == "__sinspotify__")
+      pantallaMensaje("Sin Spotify", "reintentando...", NARANJA_AVISO);
+    else if (claveActual == "__nada__")
+      pantallaMensaje("En silencio", "no hay nada sonando", GRIS);
+    else {
+      tft.fillScreen(TFT_BLACK);
+      estadoPintado = ""; lineaPintada = -2;
+      pintarContenidoModo();
+      if (modo == MODO_CON_LETRA) {
+        lineaPintada = (letras.estado == LETRA_OK) ? letras.lineaEn(progresoAhora()) : -1;
+        zonaLetra(lineaPintada);
+      }
+      hayCancion = true;
+    }
+  });
+
+  // FUERA del turno: `pintarPortada()` lo pide por su cuenta.
+  if (hayCancion && modo == MODO_PORTADA) pintarPortada();
+  if (hayCancion) {
+    barraEstado(sonando, sonando ? VERDE_SPOTIFY : GRIS);
+    if (modo == MODO_SIN_LETRA || modo == MODO_CON_LETRA) barraProgreso();
+  }
+  fundirBrillo(0, BRILLO, 200);
+}
+
 // ============================================================
 //  Spotify
 // ============================================================
@@ -1447,6 +1893,12 @@ bool bajarPortada(const String& url) {
     https.end(); Serial.printf("[Portada] tamano raro: %d B\n", total); return false;
   }
 
+  /* ⏱ El borde de la memoria: cuanto se pide y cuanto hay.
+   * Interesa el BLOQUE, no el libre: se puede tener 125 KB libres y no
+   * poder reservar 55 KB si estan troceados. */
+  Serial.printf("[Portada] pidiendo %d B · libre %lu B · bloque %lu B\n",
+                total, (unsigned long)ESP.getFreeHeap(),
+                (unsigned long)ESP.getMaxAllocHeap());
   uint8_t* buf = (uint8_t*)malloc(total);
   if (!buf) { https.end(); Serial.println("[Portada] ❌ sin memoria"); return false; }
 
@@ -1824,9 +2276,9 @@ void setup() {
   barraSpr.createSprite(BARRA_ANCHO, BARRA_ALTO);
   barraSpr.setAttribute(UTF8_SWITCH, false);
 
-  pantallaMensaje("Tamagotchi", "conectando al WiFi...", TFT_WHITE);
+  pantallaCarga("conectando al WiFi...");
   WiFi.mode(WIFI_STA); WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) delay(300);
+  while (WiFi.status() != WL_CONNECTED) { animarCarga(); delay(10); }
   Serial.printf("WiFi ✅ %s\n", WiFi.localIP().toString().c_str());
 
   /* El joystick se calibra AQUÍ, con la radio ya encendida, no antes.
@@ -1844,12 +2296,14 @@ void setup() {
   Serial.printf("[Modo] al arrancar: %s\n", nombreModo(modo));
 
   // Sin hora correcta no se validan certificados: el ESP32 arranca en 1970.
-  pantallaMensaje("Tamagotchi", "sincronizando la hora...", TFT_WHITE);
+  textoCarga("sincronizando la hora...");
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  time_t t = 0; while (t < 1700000000) { delay(300); time(&t); }
+  time_t t = 0; while (t < 1700000000) { animarCarga(); delay(10); time(&t); }
 
-  pantallaMensaje("Tamagotchi", "hablando con Spotify...", TFT_WHITE);
-  renovarToken();
+  // El token lo pide el núcleo 0 mientras este sigue bailando.
+  textoCarga("hablando con Spotify...");
+  xTaskCreatePinnedToCore(tareaTokenInicial, "token0", 12288, NULL, 2, NULL, 0);
+  while (!tokenInicialListo) { animarCarga(); delay(10); }
   claveActual = "";
 
   /* ------------------------------------------------------------
@@ -2016,6 +2470,18 @@ void tareaSpotify(void*) {
     if (millis() - ultimaConsulta >= intervalo && !nosPidieronEsperar) {
       ultimaConsulta = millis();
       CON_RED({ consultar(); });       // espera como mucho UNA petición ajena
+    }
+
+    /* ⏱ Latido del nucleo 0. Se queda: sin el no se puede saber si en un
+     * cuelgue murieron los dos nucleos o solo uno, y esa diferencia
+     * separa el abrazo mortal de la memoria pisada. El `[Latido]` de
+     * siempre lo escribe el nucleo 1, y con uno solo no se distinguen. */
+    static unsigned long latido0 = 0;
+    if (millis() - latido0 > 15000) {
+      latido0 = millis();
+      Serial.printf("[Latido-0] t=%lus  nucleo 0 vivo  libre %lu B  bloque %lu B\n",
+                    millis() / 1000, (unsigned long)ESP.getFreeHeap(),
+                    (unsigned long)ESP.getMaxAllocHeap());
     }
 
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -2248,6 +2714,14 @@ void loop() {
     peorFotograma = 0; sumaFotogramas = 0; nFotogramas = 0;
   }
 
+  /* Mientras no haya nada que enseñar, Snoopy sigue. En cuanto el
+   * núcleo 0 avisa de que ya tiene canción, se cede el paso al dibujo
+   * de siempre, que limpia la pantalla blanca y pinta lo suyo. */
+  if (enCarga) {
+    if (!pedirRedibujado) { animarCarga(); delay(5); return; }
+    enCarga = false;
+  }
+
   /* ------------------------------------------------------------
    *  El joystick se lee desde el núcleo 1 (el del dibujo)
    * ------------------------------------------------------------
@@ -2289,6 +2763,18 @@ void loop() {
      * es como funciona cualquier mando. */
     bool enSelector = (modo == MODO_PLAYLISTS && nListas > 0);
 
+    /* ⚠️ Con la pantalla oculta delante, el clic significa SALIR y nada
+     *    más. Va antes del `switch`: si cayera dentro, el clic de salir
+     *    pausaría la música de paso, y quien la encontró sin querer se
+     *    quedaría además con la canción parada sin saber por qué.
+     *
+     * 🔑 Cuando una pantalla se pone delante, se queda con TODAS las
+     *    entradas. */
+    if (pantallaOculta) {
+      if (g == GESTO_CLIC || g == GESTO_CLIC_LARGO) cerrarOculta = true;
+      return;
+    }
+
     switch (g) {
       case GESTO_CLIC:
         encolarOrden(enSelector ? ORDEN_PONER_LISTA : ORDEN_PLAYPAUSA);
@@ -2309,9 +2795,61 @@ void loop() {
         modoCambiadoEn = millis();
         repintarModo = true;
         Serial.printf("[Modo] -> %s\n", nombreModo(modo));
+        /* El cambio de pantalla se hace IGUAL aunque el gesto forme
+         * parte de la combinación. Es lo que la deja invisible: sube
+         * dos, baja dos, y acaba donde empezó. Tragarse los gestos
+         * mientras acecha la secuencia haría que la palanca se
+         * sintiera trabada al navegar rápido. */
+        if (avanzarCombinacion(g)) abrirOculta = true;
         break;
       default: break;
     }
+  }
+
+  /* ------------------------------------------------------------
+   *  La pantalla oculta manda mientras está delante
+   * ------------------------------------------------------------
+   *  Abrir y cerrar se hacen aquí, no dentro del `switch` de los
+   *  gestos, porque las dos cosas dibujan y tardan (la animación
+   *  ronda el segundo). El `switch` solo debe dejar notas.
+   *
+   *  Mientras esté visible, este bloque CORTA el resto del bucle con
+   *  un `return`. Si no, todo lo que viene después —cabecera, letra,
+   *  barra, portada— pintaría encima y duraría un fotograma.
+   * ------------------------------------------------------------ */
+  if (abrirOculta) {
+    abrirOculta = false;
+    modoAntesDeOculta = modo;
+    pantallaOculta = true;
+    Serial.println("[Oculta] abierta con la combinacion secreta");
+    fundirBrillo(BRILLO, 0, 110);
+    animacionSorpresa();
+    pintarPantallaOculta();
+    fundirBrillo(0, BRILLO, 200);
+    ultimoRefrescoOculta = millis();
+  }
+
+  if (cerrarOculta) {
+    cerrarOculta = false;
+    pantallaOculta = false;
+    Serial.println("[Oculta] cerrada");
+    despedida();                     // deja la pantalla negra y la luz apagada
+    /* Volver EXACTAMENTE a donde estaba: devolver a quien la abrió sin
+     * querer a otra pantalla sería confirmarle que algo se descolocó. */
+    modo = modoAntesDeOculta;
+    volverDeLaPantallaOculta();      // repinta y vuelve a encender
+  }
+
+  if (pantallaOculta) {
+    /* La RAM y el tiempo encendido se mueven solos: es la única de las
+     * cinco pantallas que cambia sin que nadie toque nada — y mirar si
+     * la memoria baja es precisamente para lo que sirve. */
+    if (millis() - ultimoRefrescoOculta >= 1000) {
+      ultimoRefrescoOculta = millis();
+      refrescarValoresOcultos();
+    }
+    delay(5);
+    return;
   }
 
   /* ¿El núcleo 0 avisó de que cambió algo? Se repinta la cabecera.
@@ -2347,6 +2885,7 @@ void loop() {
 
   if (pedirRedibujado) {
     pedirRedibujado = false;
+    bool eraPantallaNormal = false;   // ¿se pintó canción, o un estado especial?
     CON_DATOS({
       if (claveActual == "__sinred__") {
         pantallaMensaje("Sin conexion", "reintentando...", TFT_RED);
@@ -2361,8 +2900,13 @@ void loop() {
         tft.fillScreen(TFT_BLACK);
         estadoPintado = ""; lineaPintada = -2;
         pintarContenidoModo();
+        eraPantallaNormal = true;
       }
     });
+
+    // La portada, FUERA del turno: lo pide ella sola. Ver el aviso en
+    // `pintarContenidoModo()`.
+    if (eraPantallaNormal && modo == MODO_PORTADA) pintarPortada();
   }
 
   if (claveActual.length() && claveActual[0] != '_') {
@@ -2424,6 +2968,8 @@ void loop() {
           zonaLetra(lineaPintada);
         }
       });
+      // La portada, FUERA del turno. Ver el aviso en `pintarContenidoModo()`.
+      if (modo == MODO_PORTADA) pintarPortada();
       barraEstado(sonando, sonando ? VERDE_SPOTIFY : GRIS);
       if (modo == MODO_SIN_LETRA || modo == MODO_CON_LETRA) barraProgreso();
 
