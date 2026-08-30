@@ -15,7 +15,7 @@ fallaron, las horas perdidas, las sospechas sin confirmar. Las *decisiones* van 
 | | |
 |---|---|
 | Placa | ESP32-D0WD-V3 · MAC `84:1F:E8:2C:3E:C4` · `/dev/cu.usbserial-0001` |
-| Firmware cargado | La placa dice **`d323061+cambios`**. ⚠️ Ese `+cambios` es **TODO el trabajo de esta sesión**: joystick, controles, los cuatro modos, la portada y el selector. Sin commitear al escribir esto |
+| Firmware cargado | La placa dice **`5e3eadb`**, sin `+cambios`: coincide exactamente con `HEAD`. Todo lo de la sesión está commiteado y cargado. *Verificado preguntándole a la placa después de commitear.* |
 | Cableado | GMT130 según [`6-esquemas/conexiones-fisicas.md`](6-esquemas/conexiones-fisicas.md) **+ joystick C-005** según [`6-esquemas/conexiones-joystick.md`](6-esquemas/conexiones-joystick.md) |
 | Al cerrar | **Encendida y funcionando**, en modo portada, sonando desde la playlist `Alo 💜` |
 | Puerto serie | Libre, sin procesos colgados |
