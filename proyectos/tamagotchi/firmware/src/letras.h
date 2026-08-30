@@ -18,34 +18,57 @@
 #include <ArduinoJson.h>
 #include "texto.h"
 
-// Memoria RESERVADA DE UNA VEZ, no pedida y devuelta constantemente.
-// En un aparato que va a estar encendido días, pedir y liberar memoria
-// miles de veces la va dejando "picada" (fragmentada) hasta que un día
-// no cabe nada. Con un array fijo eso no puede pasar.
-#define MAX_LINEAS 90
-#define MAX_TEXTO  72
-
-struct LineaLetra {
-  long ms;                 // en qué milisegundo de la canción va esta línea
-  char texto[MAX_TEXTO];
-};
+/* ------------------------------------------------------------
+ *  Un almacén compartido, no un cajón por línea
+ * ------------------------------------------------------------
+ *  La primera versión daba a cada línea su propio hueco fijo de 72
+ *  bytes. Eso tenía dos problemas a la vez:
+ *
+ *    · Desperdiciaba: la línea media son 61 caracteres, así que
+ *      sobraban bytes en casi todas.
+ *    · Y aun así se quedaba corta: una línea de 90 caracteres
+ *      llegaba TRUNCADA a mitad de palabra ("...del trunk, ge").
+ *
+ *  Medido sobre 10 canciones reales:
+ *      líneas por canción   máx  56    media  42
+ *      caracteres por línea máx  90    media  61
+ *      TEXTO TOTAL          máx 2237   media 1422 bytes
+ *
+ *  O sea: el texto entero de la canción más larga cabe en 2,2 KB,
+ *  mientras que el reparto en cajones gastaba 6,5 KB sin lograrlo.
+ *
+ *  Ahora todas las líneas se guardan seguidas en un solo almacén, y
+ *  cada una apunta a dónde empieza. Sin límite de longitud por línea,
+ *  casi el doble de líneas, y la misma memoria.
+ *
+ *  🔑 Cuando los elementos son de tamaño muy variable, darle a cada uno
+ *     un hueco fijo desperdicia y se queda corto A LA VEZ. Un almacén
+ *     común se adapta solo.
+ * ------------------------------------------------------------ */
+#define MAX_LINEAS 160
+#define POOL_TEXTO 6000
 
 enum EstadoLetra { LETRA_NO_BUSCADA, LETRA_OK, LETRA_INSTRUMENTAL, LETRA_NO_HAY };
 
 class Letras {
 public:
-  LineaLetra lineas[MAX_LINEAS];
-  int n = 0;
+  long     ms[MAX_LINEAS];        // en qué milisegundo va cada línea
+  uint16_t inicio[MAX_LINEAS];    // dónde empieza su texto en el almacén
+  char     pool[POOL_TEXTO];      // todas las líneas, una tras otra
+  int      n = 0;                 // cuántas líneas hay
+  int      usado = 0;             // cuánto almacén se ha gastado
   EstadoLetra estado = LETRA_NO_BUSCADA;
 
-  void limpiar() { n = 0; estado = LETRA_NO_BUSCADA; }
+  const char* texto(int i) const { return &pool[inicio[i]]; }
+
+  void limpiar() { n = 0; usado = 0; pool[0] = 0; estado = LETRA_NO_BUSCADA; }
 
   // Devuelve el índice de la línea que toca en este milisegundo,
   // o -1 si la canción todavía no llega a la primera línea.
-  int lineaEn(long ms) const {
+  int lineaEn(long t) const {
     int r = -1;
     for (int i = 0; i < n; i++) {
-      if (lineas[i].ms <= ms) r = i; else break;
+      if (ms[i] <= t) r = i; else break;
     }
     return r;
   }
@@ -177,9 +200,9 @@ inline void Letras::parsearLRC(const char* lrc) {
   const char* p = lrc;
   while (*p && n < MAX_LINEAS) {
     if (*p == '[') {
-      long ms = tiempoLRC(p);
+      long t = tiempoLRC(p);
       const char* cierre = strchr(p, ']');
-      if (ms >= 0 && cierre) {
+      if (t >= 0 && cierre) {
         const char* ini = cierre + 1;
         while (*ini == ' ') ini++;
         const char* fin = strchr(ini, '\n');
@@ -199,10 +222,21 @@ inline void Letras::parsearLRC(const char* lrc) {
         // tools/gen-fuente.py llega hasta el código 255.
         String limpio = aLatin1(bruto);
         size_t l2 = limpio.length();
-        if (l2 >= MAX_TEXTO) l2 = MAX_TEXTO - 1;
-        memcpy(lineas[n].texto, limpio.c_str(), l2);
-        lineas[n].texto[l2] = 0;
-        lineas[n].ms = ms;
+
+        // Se acaba el almacén: mejor quedarse con las líneas completas
+        // que meter una a medias. Se avisa, por si algún día hay que
+        // agrandarlo (medido: la canción más larga usa 2.237 de 6.000).
+        if (usado + (int)l2 + 1 > POOL_TEXTO) {
+          Serial.printf("[Letra] ⚠️ almacén lleno en la línea %d (%d/%d bytes)\n",
+                        n, usado, POOL_TEXTO);
+          break;
+        }
+
+        inicio[n] = (uint16_t)usado;
+        memcpy(&pool[usado], limpio.c_str(), l2);
+        usado += l2;
+        pool[usado++] = 0;
+        ms[n] = t;
         n++;
       }
     }

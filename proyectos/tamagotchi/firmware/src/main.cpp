@@ -383,13 +383,13 @@ bool esSilencio(const char* t) {
 
 int siguienteConTexto(int desde) {
   for (int i = (desde < 0 ? 0 : desde); i < letras.n; i++)
-    if (!esSilencio(letras.lineas[i].texto)) return i;
+    if (!esSilencio(letras.texto(i))) return i;
   return -1;
 }
 
 int anteriorConTexto(int desde) {
   for (int i = desde; i >= 0; i--)
-    if (!esSilencio(letras.lineas[i].texto)) return i;
+    if (!esSilencio(letras.texto(i))) return i;
   return -1;
 }
 
@@ -465,7 +465,7 @@ void zonaLetra(int idx) {
     return;
   }
 
-  bool enSilencio = (idx < 0) || esSilencio(letras.lineas[idx].texto);
+  bool enSilencio = (idx < 0) || esSilencio(letras.texto(idx));
 
   // ------------------------------------------------------------------
   //  SILENCIO: intro, solo instrumental o pausa entre estrofas.
@@ -479,7 +479,7 @@ void zonaLetra(int idx) {
     int sig = siguienteConTexto(idx < 0 ? 0 : idx + 1);
 
     String s2[6]; bool g2 = false; int ns = 0;
-    if (sig >= 0) ns = partirConReserva(String(letras.lineas[sig].texto), ANCHO, s2, 2, g2);
+    if (sig >= 0) ns = partirConReserva(String(letras.texto(sig)), ANCHO, s2, 2, g2);
 
     // Las notas van donde iría la frase actual: en el centro del bloque.
     int altoSig = ns * (g2 ? ALTO_GRANDE : ALTO_CHICA);
@@ -502,8 +502,17 @@ void zonaLetra(int idx) {
    * really mad at me, but you're on your way to some kind of life" no
    * cabían ni encogiendo, así que se recortaban con "..." — perdiendo
    * el final de la frase, que muchas veces es lo que le da sentido. */
-  numLineasFrase = partirConReserva(String(letras.lineas[idx].texto), ANCHO,
+  numLineasFrase = partirConReserva(String(letras.texto(idx)), ANCHO,
                                     lineasFrase, 4, fraseGrande);
+
+  // Aviso solo si una frase no cupo ni encogiendo: sirve para saber si
+  // algún día hay que subir los límites, sin llenar el log el resto del
+  // tiempo.
+  if (numLineasFrase > 0 && lineasFrase[numLineasFrase-1].endsWith("...")) {
+    Serial.printf("[Frase] ⚠️ recortada (%d car): \"%s\"\n",
+                  strlen(letras.texto(idx)), letras.texto(idx));
+  }
+
   int n = numLineasFrase;
   bool grande = fraseGrande;
   String* c = lineasFrase;
@@ -522,7 +531,7 @@ void zonaLetra(int idx) {
     int ant = anteriorConTexto(idx - 1);
     if (ant >= 0) {
       String a[6]; bool ga;
-      partirConReserva(String(letras.lineas[ant].texto), ANCHO, a, 1, ga);
+      partirConReserva(String(letras.texto(ant)), ANCHO, a, 1, ga);
       escribir(a[0], Y_LETRA, false, GRIS_OSCURO);
     }
   }
@@ -537,7 +546,7 @@ void zonaLetra(int idx) {
     int sig = siguienteConTexto(idx + 1);
     if (sig >= 0) {
       String sg[6]; bool gs;
-      partirConReserva(String(letras.lineas[sig].texto), ANCHO, sg, 1, gs);
+      partirConReserva(String(letras.texto(sig)), ANCHO, sg, 1, gs);
       escribir(sg[0], Y_LETRA + ALTO_LETRA - ALTO_CHICA, false, GRIS);
     }
   }

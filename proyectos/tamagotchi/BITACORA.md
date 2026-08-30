@@ -637,10 +637,40 @@ al empezar, en vez de leerse al final.
 comprobar la marca al terminar.** Es el principio del número de pedido: no miras
 lo que hay en la mesa, comparas contra el resguardo.
 
-**3. Frases largas recortadas.** La zona mide 112 px: caben 4 renglones grandes o
-5 chicos. Estaban limitados a 3 y 4, así que frases como *"And I know you're
-really mad at me, but you're on your way to some kind of life"* se cortaban con
-`...`, perdiendo el final — que es justo lo que le da sentido.
+**3. Frases largas recortadas — y no era lo que parecía.** Subí el límite de
+renglones (3/4 → 4/5, lo que físicamente cabe) **y seguía cortándose**.
+
+En vez de seguir suponiendo, instrumenté el reparto:
+
+```
+[Frase] 71 car, ancho=645 (max 224), 3 lineas, fuente GRANDE
+        texto: "...put the cash in the trunk, ge"
+        [2] w=222 "the cash in the trunk, ge"
+```
+
+**El texto llegaba ya cortado a 71 caracteres.** El reparto funcionaba perfecto;
+el fallo estaba mucho antes, al **guardar** la letra.
+
+🔑 **Cuando el síntoma aparece al final de una cadena, hay que instrumentar la
+cadena entera.** Llevaba dos intentos arreglando el último eslabón, que era el
+único que funcionaba bien.
+
+La causa: un cajón fijo de 72 bytes por línea. Medido sobre 10 canciones reales,
+la línea más larga son **90 caracteres** pero el **texto total** de la canción más
+larga son solo **2.237 bytes**. El reparto en cajones desperdiciaba (6.480 B
+reservados) y se quedaba corto a la vez.
+
+**Solución: un almacén compartido.** Todas las líneas seguidas en un buffer, con
+un índice de dónde empieza cada una:
+
+| | Antes | Ahora |
+|---|---|---|
+| Memoria | 6.840 B | 6.960 B (+120) |
+| Líneas máximas | 90 | **160** |
+| Caracteres por línea | 71 | **sin límite** |
+
+🔑 **Cuando los elementos son de tamaño muy variable, un hueco fijo para cada uno
+desperdicia y se queda corto A LA VEZ.**
 
 Detalle en [`5-investigacion/concurrencia-y-carreras.md`](5-investigacion/concurrencia-y-carreras.md).
 

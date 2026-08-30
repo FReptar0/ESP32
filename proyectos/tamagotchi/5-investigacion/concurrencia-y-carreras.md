@@ -119,16 +119,77 @@ dieron al hacer el pedido.
 
 ---
 
-## 3. ✂️ Frases largas recortadas
+## 3. ✂️ Frases largas recortadas — y no era lo que parecía
 
-*"And I know you're really mad at me, but you're on your way to some kind of
-life"* aparecía cortada.
+Primero subí el número de renglones permitidos (de 3/4 a 4/5, que es lo que
+físicamente cabe). **Y seguía cortándose.**
 
-La zona de la letra mide **112 píxeles**. Con la fuente grande (28 px) caben
-**4 renglones** justos; con la chica (20 px), **5**.
+En vez de seguir suponiendo, instrumenté el reparto para que imprimiera qué
+estaba pasando de verdad:
 
-Estaban limitados a 3 y 4. Una frase de ~78 caracteres no cabía ni encogiendo, y
-se recortaba con `...` — perdiendo el final, que muchas veces es lo que le da
-sentido a la frase.
+```
+[Frase] 71 car, ancho=645 (max 224), 3 lineas, fuente GRANDE
+        texto: "Honey, honey get the kids in the car now, put the cash in the trunk, ge"
+        [0] w=198 "Honey, honey get the"
+        [1] w=214 "kids in the car now, put"
+        [2] w=222 "the cash in the trunk, ge"
+```
 
-Subidos a 4 y 5, que es lo que físicamente cabe.
+**El texto llegaba ya cortado: 71 caracteres, terminando en "ge".** El reparto en
+renglones funcionaba perfecto — los tres caben de sobra en 224 px. El problema
+estaba **mucho antes**, al guardar la letra.
+
+🔑 **Cuando el síntoma aparece al final de una cadena, hay que instrumentar la
+cadena entera.** Yo llevaba dos intentos arreglando el último eslabón, que era el
+único que funcionaba bien.
+
+### La causa: un cajón fijo por línea
+
+```c
+#define MAX_TEXTO 72          // 71 caracteres + fin de cadena
+char texto[MAX_TEXTO];        // uno por línea
+```
+
+Medido sobre 10 canciones reales:
+
+| | Máximo | Media |
+|---|---|---|
+| Líneas por canción | 56 | 42 |
+| Caracteres por línea | **90** | 61 |
+| **Texto total** | **2.237 B** | 1.422 B |
+
+El reparto en cajones fijos **desperdiciaba y se quedaba corto a la vez**: 90
+líneas × 72 bytes = 6.480 bytes reservados, y aun así una línea de 90 caracteres
+no cabía.
+
+### La solución: un almacén compartido
+
+Todas las líneas seguidas en un solo buffer, y cada una apunta a dónde empieza:
+
+```c
+long     ms[160];        //   640 B — el tiempo de cada línea
+uint16_t inicio[160];    //   320 B — dónde empieza su texto
+char     pool[6000];     // 6.000 B — todas las líneas, una tras otra
+```
+
+| | Antes | Ahora |
+|---|---|---|
+| Memoria | 6.840 B | **6.960 B** (+120) |
+| Líneas máximas | 90 | **160** |
+| Caracteres por línea | 71 | **sin límite** |
+
+Por 120 bytes más: **78% más líneas y ninguna se corta**. Y el texto de la canción
+más larga medida ocupa 2.237 de los 6.000 disponibles — margen de 2,7×.
+
+Verificado con la frase que fallaba:
+
+```
+[Frase] 90 car, 4 lineas
+        "Honey, honey get the kids in the car now, put the cash in the trunk, get the keys let's go"
+        [0] "Honey, honey get the"      [2] "the cash in the trunk,"
+        [1] "kids in the car now, put"  [3] "get the keys let's go"
+```
+
+🔑 **Cuando los elementos son de tamaño muy variable, darle a cada uno un hueco
+fijo desperdicia y se queda corto A LA VEZ.** Un almacén común se adapta solo: lo
+que no gasta una línea corta queda disponible para una larga.
