@@ -96,6 +96,21 @@ No asumir que ya se dijeron. Repetirlos en contexto:
 
 ---
 
+---
+
+## Skills de este taller
+
+| Skill | Cuándo usarla |
+|---|---|
+| `/cerrar-sesion` | **Antes de limpiar la conversación o dejar el proyecto.** Deja el contexto completo: estado físico de la placa, bitácora, hallazgos medidos y verificaciones pendientes |
+
+⚠️ **No uses una skill genérica de handoff aquí.** En este taller **la mitad del
+estado no está en Git**: está en una placa enchufada, con un firmware concreto
+dentro, unos cables puestos de una manera, y cosas que solo se comprueban
+mirando la pantalla. `/cerrar-sesion` captura eso; las genéricas no.
+
+---
+
 ## Estado actual
 
 **Bloqueante:** la Mac no detecta el ESP32 (verificado 2026-08-29 por dos vías

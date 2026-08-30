@@ -70,6 +70,21 @@ O simplemente dime *"quiero empezar un proyecto de X"* y yo lo armo.
 
 ---
 
+## Cerrar una sesión de trabajo
+
+```
+/cerrar-sesion
+```
+
+Antes de limpiar la conversación o dejar el proyecto. Deja escrito el estado
+físico (placa, firmware cargado, cableado), actualiza la bitácora, reparte los
+hallazgos por su fase y anota **lo que solo tú puedes verificar mirando**.
+
+Existe una propia del taller porque aquí **la mitad del estado no vive en Git**:
+está en una placa que sigue enchufada y en cosas que solo se ven en la pantalla.
+
+---
+
 ## Dos reglas que se aplican siempre
 
 **El inventario es uno solo, compartido.** No hay inventario por proyecto. El
