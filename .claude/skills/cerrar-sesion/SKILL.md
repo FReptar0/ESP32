@@ -49,8 +49,10 @@ explica nada — ya pasó dos veces.
 Anota en la bitácora:
 
 - **Placa:** conectada o no · puerto · qué modelo (hay varias en el inventario)
-- **Firmware cargado:** el commit que corresponde a lo que hay **en la placa**,
-  que puede no ser el último de Git si compilaste sin cargar
+- **Firmware cargado:** **pregúntaselo a la placa**, no lo deduzcas de Git. El
+  firmware imprime su commit al arrancar:
+  `=== Tamagotchi · firmware abc1234 ===`. Si dice `+cambios`, la placa lleva algo
+  que no está commiteado — dilo explícitamente
 - **Cableado:** qué hay conectado físicamente ahora mismo
 - **¿Sigue funcionando?** Si la dejas encendida, dilo
 

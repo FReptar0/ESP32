@@ -70,18 +70,25 @@ O simplemente dime *"quiero empezar un proyecto de X"* y yo lo armo.
 
 ---
 
-## Cerrar una sesión de trabajo
+## Abrir y cerrar una sesión de trabajo
 
 ```
-/cerrar-sesion
+/abrir-sesion     ← al empezar
+/cerrar-sesion    ← antes de limpiar la conversación
 ```
 
-Antes de limpiar la conversación o dejar el proyecto. Deja escrito el estado
-físico (placa, firmware cargado, cableado), actualiza la bitácora, reparte los
-hallazgos por su fase y anota **lo que solo tú puedes verificar mirando**.
+**`/abrir-sesion`** le pregunta a la placa en qué estado está *antes* de leer
+nada, y contrasta lo real con lo escrito. Los documentos se escribieron antes de
+apagar; el mundo pudo cambiar desde entonces.
 
-Existe una propia del taller porque aquí **la mitad del estado no vive en Git**:
-está en una placa que sigue enchufada y en cosas que solo se ven en la pantalla.
+**`/cerrar-sesion`** deja escrito el estado físico (placa, firmware cargado,
+cableado), actualiza la bitácora, reparte los hallazgos por su fase y anota **lo
+que solo tú puedes verificar mirando**.
+
+Son propias del taller porque aquí **la mitad del estado no vive en Git**: está en
+una placa que sigue enchufada y en cosas que solo se ven en la pantalla. Por eso
+el firmware lleva dentro su propio commit y lo dice al arrancar — para que no haya
+que adivinar qué versión tiene la placa.
 
 ---
 

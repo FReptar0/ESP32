@@ -100,7 +100,8 @@ No asumir que ya se dijeron. Repetirlos en contexto:
 
 | Skill | Cuándo usarla |
 |---|---|
-| `/cerrar-sesion` | **Antes de limpiar la conversación o dejar el proyecto.** Deja el contexto completo: estado físico de la placa, bitácora, hallazgos medidos y verificaciones pendientes |
+| `/abrir-sesion` | **Al empezar.** Le pregunta a la placa en qué estado está, lo contrasta con lo que dicen los documentos y resume dónde se quedó todo |
+| `/cerrar-sesion` | **Antes de limpiar la conversación o dejar el proyecto.** Deja el contexto completo: estado físico, bitácora, hallazgos medidos y verificaciones pendientes |
 
 ⚠️ **No uses una skill genérica de handoff aquí.** En este taller **la mitad del
 estado no está en Git**: está en una placa enchufada, con un firmware concreto

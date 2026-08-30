@@ -888,6 +888,9 @@ void tareaLetras(void*);
 
 void setup() {
   Serial.begin(115200); delay(400);
+  // Lo primero que dice al arrancar: qué versión es. Así se puede saber
+  // qué hay cargado sin tener que adivinarlo desde Git.
+  Serial.printf("\n=== Tamagotchi · firmware %s ===\n", FW_VERSION);
   ledcSetup(CANAL_PWM, 5000, 8); ledcAttachPin(TFT_BL, CANAL_PWM);
   ledcWrite(CANAL_PWM, BRILLO);
   mutexDatos = xSemaphoreCreateMutex();
