@@ -30,6 +30,17 @@ lo toque.
 
 ## ✅ Hallazgos
 
+### 2026-08-30 — Leer las canciones de una playlist está PROHIBIDO, y no es falta de permisos
+
+**Qué se intentó:** fusionar `Alo 💜` y `for you` para crear la playlist `A&F`.
+**Por qué no se puede:** `GET /playlists/{id}/tracks` devuelve **403 "Forbidden"**
+—no "Insufficient client scope"—, y `GET /playlists/{id}` **borra el campo
+`tracks`** de la respuesta. Es un cierre de las apps en Modo Desarrollo, no un
+permiso que falte, así que volver a autorizar no serviría de nada.
+**Sin arreglo posible:** el Modo Extendido exige 250.000 usuarios activos.
+**El aparato no se ve afectado:** todo lo que usa el firmware sigue funcionando.
+→ [`spotify-api-2026.md`](spotify-api-2026.md#ampliación-2026-08-30--leer-las-canciones-de-una-playlist-sí-está-bloqueado)
+
 ### 2026-08-30 — La caché de la portada: probada, medida y descartada
 
 **Qué se preguntó:** por qué hay que rebajar la carátula al volver al modo.

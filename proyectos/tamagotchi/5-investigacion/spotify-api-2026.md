@@ -172,6 +172,55 @@ En su lugar queda una pregunta de sí o no que se responde en 5 segundos.
 
 ---
 
+## ⚠️ Ampliación 2026-08-30 — leer las canciones de una playlist SÍ está bloqueado
+
+Este documento decía *"los endpoints de reproductor no están en esa lista,
+seguimos bien"*. Es cierto para lo que el aparato necesita, pero **incompleto**:
+al intentar fusionar dos playlists apareció un bloqueo que no estaba contemplado.
+
+**Probado con el token real del proyecto:**
+
+| Petición | Resultado |
+|---|---|
+| `GET /me/playlists` | ✅ 200 |
+| `GET /playlists/{id}?fields=name,description` | ✅ 200 |
+| `GET /me/player/currently-playing` | ✅ 200 |
+| **`GET /playlists/{id}/tracks`** | ❌ **403 `"Forbidden"`** |
+| `GET /playlists/{id}` → campo `tracks` | ❌ **Spotify lo BORRA de la respuesta** |
+
+### 🔑 El detalle que da el diagnóstico: dos 403 que no significan lo mismo
+
+```
+GET /playlists/{id}/tracks  ->  403  "Forbidden"
+GET /me/tracks              ->  403  "Insufficient client scope"
+```
+
+- **`Insufficient client scope`** = falta un permiso. Se arregla volviendo a
+  autorizar con el scope que toque.
+- **`Forbidden`** a secas = el endpoint está **cerrado para esta clase de app**.
+  Ningún permiso lo abre.
+
+Sin leer ese mensaje, los dos parecen el mismo problema y uno se pasa la tarde
+pidiendo permisos que no sirven de nada.
+
+Y el `fields` lo confirma desde otro ángulo: pedir `name,tracks.total` devuelve
+`{"name":"Alo 💜"}` — Spotify **elimina el campo** en vez de dar un error, que es
+más silencioso y más confuso.
+
+### Qué significa para el proyecto
+
+- **El aparato no se ve afectado.** Todo lo que usa el firmware sigue funcionando.
+- **Pero no se pueden hacer cosas con el CONTENIDO de las playlists** desde aquí:
+  ni fusionarlas, ni listarlas, ni copiar canciones. Eso hay que hacerlo en la
+  app de Spotify.
+- **No tiene arreglo.** El Modo Cuota Extendida exige una organización con
+  250.000 usuarios activos mensuales (ver la sección 4 de este documento). Este
+  proyecto se queda en Modo Desarrollo de forma permanente.
+
+🔑 **Un documento que dice "esto no nos afecta" solo cubre lo que se probó ese
+día.** Aquí se verificaron los endpoints del reproductor, que era lo que hacía
+falta entonces, y la conclusión se generalizó de más.
+
 ## Fuentes
 
 - [Get Currently Playing Track](https://developer.spotify.com/documentation/web-api/reference/get-the-users-currently-playing-track)
