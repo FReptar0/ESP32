@@ -41,6 +41,21 @@ permiso que falte, así que volver a autorizar no serviría de nada.
 **El aparato no se ve afectado:** todo lo que usa el firmware sigue funcionando.
 → [`spotify-api-2026.md`](spotify-api-2026.md#ampliación-2026-08-30--leer-las-canciones-de-una-playlist-sí-está-bloqueado)
 
+### 2026-08-30 — El aparato se colgaba en silencio: el mismo turno, pedido dos veces
+
+**Qué pasaba:** se quedaba tieso —sin pantalla, sin música, sin joystick— y solo
+revivía desenchufándolo. **Sin `rst:`, sin `Guru Meditation`, sin `Backtrace`:**
+esa ausencia era la pista, porque significa que no se rompió, se quedó esperando.
+**Cómo se separó de la otra hipótesis:** poniéndole un plazo al turno **sin
+cambiar el comportamiento** (si se agota, avisa y sigue esperando igual). Saltó:
+`[TURNO] datos: 3s esperando · nucleo 1 · linea 901`.
+**La causa:** `pintarContenidoModo()` → `pintarPortada()` → `imagenQueTocaAhora()`
+pedía **dentro del turno el mismo turno**, que no es reentrante. La petición
+anidada estaba tres llamadas más abajo, invisible a ojo.
+**Cómo se arregló:** la portada se dibuja fuera del turno. Queda una comprobación
+automática que sigue las llamadas y avisa si vuelve a anidarse.
+→ [`cuelgue-por-turno-anidado.md`](cuelgue-por-turno-anidado.md)
+
 ### 2026-08-30 — La caché de la portada: probada, medida y descartada
 
 **Qué se preguntó:** por qué hay que rebajar la carátula al volver al modo.

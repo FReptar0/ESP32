@@ -268,6 +268,10 @@ Cosas que ya costaron tiempo. Si la siguiente sesión las conoce, no las repite:
 | Trampa | Señal | Qué hacer |
 |---|---|---|
 | Proceso ocupando el puerto serie | La carga falla en 2 s sin explicación | `lsof /dev/cu.usbserial-0001` y matarlo |
+| **Pedir el mismo turno dos veces** (mutex no reentrante) | La placa se calla del todo: **sin `rst:`, sin `Guru Meditation`** | Ponerle un plazo al `xSemaphoreTake` para que diga núcleo y línea. Ver [`cuelgue-por-turno-anidado.md`](../../../proyectos/tamagotchi/5-investigacion/cuelgue-por-turno-anidado.md) |
+| Culpar al cambio recién cargado | El fallo aparece justo después de cargar algo nuevo | Cargar el firmware ANTERIOR y reproducirlo. Un fallo nuevo suele ser uso nuevo, no código nuevo |
+| Tomar el ruido del arranque por una prueba | Líneas partidas o repetidas cientos de veces | Mirar **cuándo** aparecen: si es siempre al arrancar, no explican nada posterior |
+| Apagar la luz en un sitio y encenderla en otro | Pantalla negra permanente y aparato aparentemente muerto | El sitio que enciende tiene que correr SIEMPRE, sin condiciones |
 | Macros de Arduino (`HEX`, `cli`, `min`, `max`…) | Error de compilación absurdo con un nombre corto | Renombrar la variable |
 | `Transfer-Encoding: chunked` | HTTP 200 pero el JSON no se puede leer | Usar `LectorChunked` |
 | Objetos grandes en la pila | `Stack canary watchpoint triggered` | Hacerlos globales. La pila son 8–16 KB, no los 200 KB del montón |
