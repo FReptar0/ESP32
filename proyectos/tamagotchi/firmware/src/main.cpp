@@ -86,7 +86,26 @@ bool reproducirLista(const String& id);   // vive con las demás peticiones
  *    uno permanente — y en un aparato regalado, nadie va a reiniciarlo. */
 unsigned long listasIntentadasEn = 0;
 bool listasPedidas = false;
-const unsigned long MS_REINTENTAR_LISTAS = 15000;
+
+/* Dos ritmos de reintento, según lo que esté pasando:
+ *
+ *  · NINGUNA encontrada  -> cada 15 s. Algo va mal (red, token) y se
+ *    espera que se arregle pronto.
+ *
+ *  · ALGUNAS encontradas -> cada 5 min. Las que faltan simplemente
+ *    todavía no existen. Es el caso de `A&F`, que se creó un día
+ *    después: buscarlas por nombre solo tiene sentido si el aparato
+ *    vuelve a mirar de vez en cuando.
+ *
+ *  ⚠️ La primera versión pedía la lista UNA VEZ por arranque. Como ya
+ *     había encontrado dos, no volvía a mirar nunca — y la playlist
+ *     nueva no aparecía hasta reiniciar. Eso rompía justo la promesa
+ *     de buscar por nombre.
+ *
+ *  🔑 Un dato que puede cambiar solo no se puede leer una sola vez.
+ *     Y "poder cambiar" incluye "todavía no existe". */
+const unsigned long MS_REINTENTAR_LISTAS   = 15000;    // no hay ninguna
+const unsigned long MS_REVISAR_SI_APARECEN = 300000;   // faltan algunas
 
 // Cada cuánto se le pregunta a Spotify. Más seguido = detecta antes las
 // pausas y los cambios, pero se acerca al límite de peticiones (que se
@@ -1529,7 +1548,7 @@ bool pedirListas() {
     }
   }
   nListas = n;
-  if (listaSel >= nListas) listaSel = 0;
+  if (listaSel >= nListas) listaSel = 0;   // por si ahora hay menos que antes
   Serial.printf("[Listas] %d de %d encontradas · RAM %lu B\n",
                 n, N_LISTAS_ELEGIDAS, (unsigned long)ESP.getFreeHeap());
   return true;
@@ -1964,9 +1983,11 @@ void tareaSpotify(void*) {
     /* Las playlists se piden una sola vez, al entrar por primera vez
      * al selector: sus nombres no cambian mientras el aparato está
      * encendido, y la respuesta es grande. */
-    if (modo == MODO_PLAYLISTS && nListas == 0
+    unsigned long esperaListas = (nListas == 0) ? MS_REINTENTAR_LISTAS
+                                                : MS_REVISAR_SI_APARECEN;
+    if (modo == MODO_PLAYLISTS && nListas < N_LISTAS_ELEGIDAS
         && (listasIntentadasEn == 0
-            || millis() - listasIntentadasEn > MS_REINTENTAR_LISTAS)) {
+            || millis() - listasIntentadasEn > esperaListas)) {
       listasIntentadasEn = millis();
       bool ok = false;
       CON_RED({ ok = pedirListas(); });
