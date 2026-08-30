@@ -16,3 +16,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Registros del puerto serie: son de una sesión concreta, no del proyecto
+proyectos/*/logs/

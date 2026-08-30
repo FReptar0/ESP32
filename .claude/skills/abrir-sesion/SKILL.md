@@ -94,8 +94,64 @@ Ahora sí, y **en este orden**, sin leer más de lo necesario:
    acción concreta.
 3. **`CLAUDE.md`** → estado general y reglas del taller.
 
-**No leas los ADRs ni la investigación completa todavía.** Son referencia, no
-contexto de arranque. Se consultan cuando hagan falta.
+## Paso 3b — Mapear qué se decidió ya, ANTES de proponer nada
+
+> ⚠️ **Este paso existe porque su ausencia ya rompió el aparato.** Ver
+> [la trampa de abajo](#-la-trampa-que-obligo-a-crear-este-paso).
+
+No hay que leerlo todo. Hay que saber **qué existe**, para poder consultarlo
+antes de tocar la parte que le corresponde:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+
+echo "=== Estructura del proyecto ==="
+find proyectos/*/ -maxdepth 1 -mindepth 1 | sort
+
+echo "=== Decisiones ya tomadas (títulos) ==="
+grep -h '^# ' proyectos/*/1-decisiones/ADR-*.md
+
+echo "=== Investigación disponible (títulos) ==="
+grep -h '^# ' proyectos/*/5-investigacion/*.md
+```
+
+Eso son ~25 líneas y da el índice completo de lo ya razonado.
+
+🔑 **La regla, y no admite excepción:**
+
+> **Antes de cambiar cómo funciona algo, busca si ya hay un documento sobre
+> ESO.** Si lo hay, léelo entero. Un archivo llamado
+> `cancelacion-de-busquedas.md` no es material de referencia opcional cuando vas
+> a tocar la cancelación de búsquedas: es el acta de por qué está así.
+
+Cómo buscarlo, con el tema concreto que vayas a tocar:
+
+```bash
+grep -ril "<tema>" proyectos/*/5-investigacion/ proyectos/*/1-decisiones/
+```
+
+### ⚠️ La trampa que obligó a crear este paso
+
+**2026-08-29.** Esta skill decía literalmente *"no leas los ADRs ni la
+investigación todavía"*. Siguiendo esa instrucción:
+
+1. Se midió que cada petición HTTPS costaba ~4 s (correcto, y era real).
+2. Se "arregló" encadenando las peticiones sobre una conexión reutilizada.
+3. **Resultado: el aparato tardaba muchísimo en detectar cambios de canción.**
+
+Lo que no se leyó: [`5-investigacion/cancelacion-de-busquedas.md`](../../../proyectos/tamagotchi/5-investigacion/cancelacion-de-busquedas.md),
+que documentaba ese mismo diseño como **un fallo ya cometido y ya arreglado**, e
+incluso avisaba de la trampa exacta en la que se volvió a caer:
+
+> *"El razonamiento era falso. Da igual para qué sea la petición: mientras el
+> hilo de red esté ocupado, el aparato es ciego."*
+
+Hubo que revertirlo entero.
+
+🔑 **Una medición correcta no basta para justificar un cambio.** Los 4 s eran
+ciertos; la conclusión era falsa, porque ignoraba una restricción que alguien ya
+había descubierto y escrito. **El histórico no es contexto opcional: es la lista
+de trampas que este proyecto ya pisó.**
 
 ## Paso 4 — Buscar desfases
 
@@ -176,8 +232,14 @@ pregunta.
 
 **Las trampas conocidas** están en la tabla de
 [`/cerrar-sesion`](../cerrar-sesion/SKILL.md#trampas-de-este-repo-para-no-repetirlas).
-Vale la pena mirarla si aparece un error raro: casi todos los de este repo ya
-pasaron una vez.
+**Léela al arrancar, no solo cuando algo falle.** Varias de sus filas no
+describen errores raros sino *arreglos que parecen buenas ideas y no lo son* —
+y esas no se descubren depurando, se descubren habiéndolas leído antes.
+
+**Cuando algo se revierta, se escribe.** Un intento fallido es un hallazgo: va a
+`5-investigacion/` con lo que se midió y por qué la conclusión era falsa, y su
+fila en la tabla de trampas. Lo que no queda escrito se vuelve a intentar — ya
+pasó.
 
 **El tono:** el usuario está aprendiendo electrónica. Explicar el porqué, avisar
 ⚠️ **antes** de lo que pueda romper algo, y un componente a la vez al cablear.

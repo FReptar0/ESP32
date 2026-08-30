@@ -230,3 +230,12 @@ Cosas que ya costaron tiempo. Si la siguiente sesión las conoce, no las repite:
 | Certificados de Python en macOS | `CERTIFICATE_VERIFY_FAILED` | El script usa `certifi`; si falla, `Install Certificates.command` |
 | Comparar RAM entre compilaciones distintas | Parece que hay una fuga | Medir con el mismo binario y en el mismo punto del ciclo |
 | Buscar el fallo en el último eslabón | El síntoma sale al final de una cadena | Instrumentar la cadena **entera** antes de tocar nada |
+| **Optimizar el hilo de red encadenando peticiones** | Los cambios de canción tardan en notarse | El hilo de red es **el único sentido** del aparato. Nunca encadenar peticiones sin soltar el turno: [`cancelacion-de-busquedas.md`](../../../proyectos/tamagotchi/5-investigacion/cancelacion-de-busquedas.md) |
+| **Cambiar algo sin leer si ya se decidió** | Se "arregla" y reaparece un fallo viejo | `grep -ril "<tema>" proyectos/*/5-investigacion/ proyectos/*/1-decisiones/` **antes** de tocar |
+| **Apagar una máquina de estados compartida** | Una canción suena entera sin letra, y repetirla no la recupera | Comprobar que `fase` sigue siendo tuya (`generacion == miGen`) antes de ponerla a NADA |
+| **"Repetirlo no lo arregla"** | El usuario reintenta y da igual | No es una queja, es un dato: el fallo está en que **no se reintenta**, no en la operación |
+| **Mutex no recursivo** | Cuelgue total al "mejorar" la protección de una función | `CON_RED` NO es recursivo. Antes de envolver una llamada, comprobar si ya corre dentro de otro `CON_RED` |
+| **Alargar una espera sin mirar qué tienes bloqueado** | Un hilo ajeno se queda parado sin culpa | Ver qué mutex se tienen en la mano ANTES de subir un `delay`. Mejor apuntar "hasta cuándo no" y soltar |
+| **`HTTPClient::header()` devuelve vacío** | Una cabecera de respuesta siempre sale 0 o "" | Hay que pedirla antes con `collectHeaders()`. No falla: miente |
+| **Abrir el puerto serie sin tocar DTR/RTS** | La captura sale como basura ilegible, megas de símbolos | Abrir el puerto en macOS activa DTR/RTS y deja la placa en modo arranque. Hacer siempre la secuencia de reinicio: `setDTR(False); setRTS(True); sleep; setRTS(False)` |
+| **Pines del ADC2 con WiFi encendido** | El sensor analógico funciona suelto y falla al añadir la red | El driver de WiFi se apropia del ADC2. Solo ADC1: GPIO 32–36 y 39 |
