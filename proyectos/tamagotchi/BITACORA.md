@@ -220,13 +220,27 @@ es de las grandes.
 
 #### 🎯 Lo siguiente
 
-1. **RF-15 y RF-16: la pantalla oculta.** Falta decidir la combinación secreta
-   —difícil de hacer sin querer, fácil de repetir— y diseñar la animación de
-   sorpresa con el `"Te quiero!!"` al salir.
+1. **RF-15/16 — primera acción concreta: elegir la combinación secreta.**
+   El resto del diseño depende de eso. Tiene que cumplir dos cosas a la vez:
+   **improbable sin querer** y **fácil de repetir cuando la conoces**. Candidatas
+   que ya permite el joystick tal como está:
+
+   | Candidata | A favor | En contra |
+   |---|---|---|
+   | Clic largo (~1 s) en un modo concreto | Ya está implementado el `GESTO_CLIC_LARGO` | Se puede hacer sin querer al pausar |
+   | Arriba·arriba·abajo·abajo seguidos | Muy improbable por accidente; tiene guiño | Hay que añadir detección de secuencias |
+   | Mantener izquierda + clic | Un solo gesto, difícil de repetir por azar | Hay que leer dos entradas a la vez |
+
+   Decidida esa, lo demás sale solo: qué muestra (RAM, WiFi, versión, tiempo
+   encendido), la animación de sorpresa, y el `"Te quiero!!"` al salir con un
+   solo clic.
+
 2. **La curva de fragmentación a 2 h quedó a medias.** Se interrumpió varias
-   veces por recargas de firmware. Con el código actual el bloque vuelve a
-   110.580, pero conviene dejarlo grabando una tarde entera:
-   `python3 tools/registrar-serie.py 120`.
+   veces por recargas de firmware. **Medido en tramos cortos:** el bloque
+   contiguo se asienta en **59.380 B** y ahí se queda (5 latidos seguidos).
+   **Supuesto, no medido:** que siga estable durante horas. Lo confirmaría
+   dejarlo grabando una tarde entera con
+   `python3 tools/registrar-serie.py 120` y comprobar que ese número no baja.
 3. ~~**La playlist `A&F` no existe todavía.**~~ ✅ **Creada el 2026-08-30** por el
    usuario, a mano en la app de Spotify (fusionarla por API es imposible). El
    aparato la encuentra sola: `3 de 3 encontradas`.

@@ -92,6 +92,12 @@ Ahora sí, y **en este orden**, sin leer más de lo necesario:
    principio. Está puesto arriba a propósito: es el resumen del estado.
 2. La sección **`🔜 En qué me quedé`** → verificaciones pendientes y la siguiente
    acción concreta.
+
+   ⚠️ **Ese bloque ES el traspaso.** La conversación de la sesión anterior ya no
+   existe: lo que no quedó escrito ahí, se perdió. Si lo encuentras vago —un tema
+   en vez de una acción, o sin distinguir lo medido de lo supuesto— **dilo al
+   resumir**. No lo rellenes con suposiciones: es una señal de que el cierre
+   anterior se hizo a medias, y quien vuelve merece saberlo antes de fiarse.
 3. **`CLAUDE.md`** → estado general y reglas del taller.
 
 ## Paso 3b — Mapear qué se decidió ya, ANTES de proponer nada

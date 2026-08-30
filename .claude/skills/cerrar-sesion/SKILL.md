@@ -204,7 +204,43 @@ git -c user.name="freptar0" -c user.email="yahir.dev13@gmail.com" \
     commit -F /ruta/al/mensaje.txt
 ```
 
-## Paso 7 — Resumen final al usuario
+## Paso 7 — Comprobar que el cierre sobrevive al borrado
+
+> **Este paso existe porque el resumen del Paso 8 se borra.**
+>
+> Esta skill se usa **justo antes de limpiar la conversación**. Todo lo que le
+> cuentes al usuario en el chat desaparece con ella. **Lo único que llega a la
+> siguiente sesión es lo que quedó ESCRITO en el repo.**
+>
+> 🔑 Un resumen precioso en el chat y una bitácora a medias es el peor
+>    resultado posible: parece que cerraste bien y no cerraste nada.
+
+Antes de escribir el resumen, **lee el bloque `🔜 En qué me quedé` como si no
+supieras nada de esta sesión** y responde:
+
+- [ ] ¿Dice **la siguiente acción concreta**, no un tema? *("Decidir la
+      combinación del joystick para la pantalla oculta" sí; "seguir con la
+      pantalla oculta" no)*
+- [ ] ¿Están las **verificaciones que solo puede hacer el usuario**, con qué
+      respuesta se espera de cada una?
+- [ ] ¿Se distingue lo **medido** (con su número) de lo **supuesto**?
+- [ ] ¿Están los **diagnósticos fallidos**, para no repetir el camino?
+- [ ] ¿La fila del **firmware cargado** dice lo que la placa dice AHORA?
+
+**Si algo del resumen que ibas a dar no está escrito, escríbelo antes.** La
+prueba es simple: si tuvieras que borrar el chat ahora mismo y volver mañana,
+¿te bastaría con el repo?
+
+### ⚠️ Si ya cerraste antes en esta misma sesión
+
+Pasa: se cierra, se sigue trabajando y hay que cerrar otra vez. **Entonces se
+ACTUALIZA el bloque de cierre, no se añade otro.** Dos bloques `🔚` compitiendo
+por ser "el que se lee primero" es peor que ninguno.
+
+Revisa especialmente la **fila del firmware**: si commiteaste y recargaste, el
+commit cambió y esa fila queda mintiendo. Ya pasó.
+
+## Paso 8 — Resumen final al usuario
 
 Cierra con esto, corto:
 
@@ -213,6 +249,15 @@ Cierra con esto, corto:
 3. **El estado físico** — placa, firmware cargado, cableado
 4. **Lo que necesita que mire** (paso 5)
 5. **Por dónde seguir** — la siguiente acción concreta, no una lista de ideas
+
+Y **termina recordándole cómo volver**, porque es literalmente para lo que sirve
+todo esto:
+
+> Cuando vuelvas, corre **`/abrir-sesion`**: le pregunta a la placa en qué estado
+> está, lo contrasta con lo escrito y te resume dónde te quedaste.
+
+No des por hecho que se acuerda. Quien vuelve puede ser el usuario dentro de tres
+semanas — o una conversación nueva que no vio nada de esto.
 
 ---
 
