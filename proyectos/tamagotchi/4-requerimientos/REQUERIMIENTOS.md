@@ -25,6 +25,21 @@ Además es un **proyecto de descubrimiento**: se van comprando piezas sobre la
 marcha y se mejora conforme se entiende más. Los requerimientos van a cambiar y
 eso es esperado, no un problema.
 
+### 🎁 Y va a ser un regalo
+
+Decidido a mitad del proyecto, y **cambia las prioridades**: el aparato va a estar
+en manos de alguien que no puede depurarlo ni reiniciarlo a conciencia.
+
+Consecuencias prácticas, todas ya aplicadas:
+
+- **La estabilidad pesa más que las funciones nuevas.** Un reinicio ocasional es
+  aceptable en un prototipo propio; en un regalo, no.
+- **Todo fallo debe degradar, no romper.** Sin letra se sigue viendo la canción;
+  sin red se avisa en rojo; si la memoria bajara, el hilo de letras se aparta solo.
+- **Los detalles visuales importan.** El desplazamiento sin tirones, la transición
+  entre frases, los acentos y el color del corazón no son adornos: son lo único
+  que va a ver quien lo reciba.
+
 ---
 
 ## Requerimientos funcionales
@@ -36,8 +51,8 @@ eso es esperado, no un problema.
 | RF-03 | Mostrar el **artista** | Debería | Se distingue claramente del título | ✅ **Hecho** |
 | RF-04 | Mostrar la **letra** sincronizada con la canción | Debería | La línea en pantalla corresponde a lo que se está cantando, con < 2 s de desfase | ✅ **Hecho** — sincronía confirmada mirando |
 | RF-05 | Conectarse a WiFi solo, al encender | Debe | Se enchufa y a los < 30 s ya está mostrando algo, sin intervención | ✅ **Hecho** |
-| RF-06 | Indicar visualmente cuando **no** hay nada sonando | Debe | Pantalla en reposo distinguible, no la última canción congelada | 🟡 Implementado, falta verlo |
-| RF-07 | Indicar visualmente cuando **perdió la conexión** | Debería | Se distingue "no hay música" de "no hay internet" — son problemas distintos | 🟡 Implementado, falta verlo |
+| RF-06 | Indicar visualmente cuando **no** hay nada sonando | Debe | Pantalla en reposo distinguible, no la última canción congelada | ✅ **Hecho** — verificado mirando |
+| RF-07 | Indicar visualmente cuando **perdió la conexión** | Debería | Se distingue "no hay música" de "no hay internet" — son problemas distintos | ✅ **Hecho** — verificado mirando |
 | RF-08 | **Pausar y reanudar** la reproducción desde el aparato | Podría | Un control físico pausa lo que suena en el celular o la Mac en < 2 s | 🔲 Pendiente |
 | RF-09 | **Saltar** a la canción siguiente o anterior | Podría | Igual que RF-08, con siguiente/anterior | 🔲 Pendiente |
 | RF-10 | **Ajustar el volumen** desde el aparato | Podría | Un encoder o botones cambian el volumen del aparato que reproduce | 🔲 Pendiente |
@@ -47,7 +62,7 @@ eso es esperado, no un problema.
 | ID | Requerimiento | Valor objetivo | Cómo se mide |
 |---|---|---|---|
 | RNF-01 | ~~Legible a distancia de escritorio~~ | ✅ **Resuelto** — fuente 4 (26 px) se lee cómodo a 60 cm | Probado mirando la pantalla |
-| RNF-02 | No molesta de noche | No ilumina la habitación a oscuras | 🟡 Brillo por PWM al 55% implementado. Falta probarlo a oscuras y ajustar |
+| RNF-02 | ~~No molesta de noche~~ | No ilumina la habitación a oscuras | ✅ **Verificado** a oscuras con el brillo al 55% |
 | RNF-03 | Cabe en un escritorio | < 10 × 10 × 10 cm aprox. | Medir |
 | RNF-04 | El proyecto se puede recompilar dentro de un año y funciona igual | Versiones fijadas en `platformio.ini` | Ver [ADR-0001](../1-decisiones/ADR-0001-plataforma-de-desarrollo.md) |
 | RNF-05 | ~~Las credenciales no acaban en ningún repositorio~~ | 0 secretos en Git | ✅ **Verificado** — comprobación automatizada en la skill `/cerrar-sesion` |
@@ -127,6 +142,7 @@ que el proyecto pueda terminarse:
 | 2026-08-29 | Versión inicial | Arranque del proyecto |
 | 2026-08-29 | RF-04 implementado: letras sincronizadas desde LRCLIB | Búsqueda en dos pasos + lector de respuestas troceadas. Falta verificarlo mirando |
 | 2026-08-29 | S-05 resuelto — **los 9 supuestos cerrados**. ADR-0003 aceptado (LRCLIB) | La API verificada con consultas reales. La canción que parecía faltar sí estaba: el fallo era la duración |
+| 2026-08-29 | **RF-06 y RF-07 ✅ HECHOS · RNF-02 verificado.** Registrado que el proyecto será un regalo | Todas las verificaciones visuales pasaron |
 | 2026-08-29 | **RF-04 ✅ HECHO** — letras sincronizadas funcionando y confirmadas mirando. RNF-05 verificado | Cierre de sesión |
 | 2026-08-29 | RF-01, RF-02, RF-03 y RF-05 ✅ HECHOS | La pantalla muestra canción, artista, álbum y progreso, en vivo |
 | 2026-08-29 | RNF-01 resuelto (fuente 4). El texto disponible baja a ~17 car. × 9 líneas | Medición perceptual en la pantalla real. Casi la mitad de lo estimado con fuente 8×16: aprieta el RF-04 |

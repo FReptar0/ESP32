@@ -111,10 +111,26 @@ mirando la pantalla. `/cerrar-sesion` captura eso; las genéricas no.
 
 ## Estado actual
 
-🟢 **El Tamagotchi funciona.** Muestra en pantalla la canción, artista, álbum,
-playlist, progreso y **letras sincronizadas**, con el certificado de Spotify
-verificado. El ESP32 lo hace todo solo: se conecta, sincroniza la hora, renueva
-su propio token y dibuja.
+🟢 **El Tamagotchi está terminado y verificado.** Muestra en pantalla la canción,
+artista, álbum, playlist, progreso y **letras sincronizadas**, con el certificado
+de Spotify verificado. El ESP32 lo hace todo solo: se conecta, sincroniza la hora,
+renueva su propio token y dibuja.
+
+**10 de 13 requerimientos cumplidos.** Los 3 que faltan son los controles de
+reproducción (RF-08/09/10), de prioridad "Podría" y fuera de la v1 a propósito.
+Todas las verificaciones visuales pasaron el 2026-08-29.
+
+### 🎁 Va a ser un regalo — cambia las prioridades
+
+Decidido a mitad del proyecto. El aparato va a estar en manos de alguien que no
+puede depurarlo ni reiniciarlo a conciencia:
+
+- **La estabilidad pesa más que las funciones nuevas.** Antes de añadir algo,
+  medir que lo que hay sigue estable.
+- **Todo fallo debe degradar, no romper.** Es el criterio aplicado en todo el
+  firmware: sin letra se sigue viendo la canción, sin red se avisa en rojo, si
+  baja la memoria el hilo de letras se aparta solo.
+- **Los detalles visuales no son adornos:** son lo único que verá quien lo reciba.
 
 - Placa: **ESP32-D0WD-V3**, MAC `84:1F:E8:2C:3E:C4`, puerto `/dev/cu.usbserial-0001`
 - Pantalla: **GMT130** (ST7789, 240×240) cableada según

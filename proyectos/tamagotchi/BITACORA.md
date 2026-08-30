@@ -877,20 +877,23 @@ Detalle en [`5-investigacion/emojis-e-iconos.md`](5-investigacion/emojis-e-icono
 
 ### 🔜 En qué me quedé — siguiente sesión
 
-#### 👀 Verificaciones que solo puedes hacer tú (mirando)
+#### ✅ Verificaciones visuales — TODAS PASADAS (2026-08-29)
 
-Ninguna de estas se puede comprobar desde la terminal. Están con la respuesta que
-se espera, para que no haya que interpretarlas:
+Comprobadas por el usuario mirando el aparato. **Ninguna se podía verificar desde
+la terminal**, y con ellas se cierran RF-06, RF-07 y RNF-02:
 
-| Qué probar | Qué debería pasar |
+| Qué se probó | Resultado |
 |---|---|
-| Dale **pausa** en Spotify | El símbolo de arriba a la derecha pasa a ⏸ y la barra de progreso se pone gris, en < 2 s |
-| **Apaga el WiFi** del router | Aparece `Sin conexión` en rojo, y vuelve solo al restaurarlo |
-| Míralo **a oscuras** | No debería iluminar la habitación. Si molesta, es bajar `BRILLO` (ahora 140 de 255) |
-| Deja pasar una **intro instrumental** | Nota musical blanca centrada + la frase que viene en gris debajo |
-| Una canción **sin letra** en LRCLIB | Dice `sin letra` pero sigue mostrando canción, artista y progreso |
-| El **desplazamiento** de la descripción | Continuo y sin tirones, incluso mientras carga una letra nueva |
-| La **transición** entre frases | Aparición gradual de gris a blanco, sin parpadeo |
+| **Pausa** en Spotify | ✅ Símbolo ⏸ y barra gris |
+| **WiFi apagado** | ✅ `Sin conexión` en rojo, y vuelve solo |
+| **A oscuras** | ✅ No molesta con el brillo al 55% |
+| **Intro instrumental** | ✅ Nota blanca centrada + frase siguiente en gris |
+| **Canción sin letra** | ✅ Dice `sin letra` y sigue mostrando todo lo demás |
+| **Desplazamiento** de la descripción | ✅ Continuo, sin tirones |
+| **Transición** entre frases | ✅ Fundido limpio, sin parpadeo |
+
+🔑 **Todo lo que se diseñó para "degradar en vez de romper" se comportó como se
+esperaba.** Esa era la parte que no se podía demostrar midiendo — solo mirando.
 
 #### 🎯 La siguiente acción concreta
 
