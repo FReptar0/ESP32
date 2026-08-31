@@ -17,6 +17,7 @@ con su razonamiento original intacto.
 | [0011](ADR-0011-imagenes-en-pantalla.md) | JPEG por bloques, solo la versión de **300 px**, y **sin guardarla** | ✅ `Aceptado` | 2026-08-30 |
 | [0012](ADR-0012-combinacion-secreta.md) | La pantalla oculta se abre con **`↑↑↓↓`**, la mitad del Código Konami | ✅ `Aceptado` | 2026-08-30 |
 | [0013](ADR-0013-animacion-de-carga.md) | La animación de carga va en **fotogramas de 1 bit**, no reproduciendo el GIF | ✅ `Aceptado` | 2026-08-30 |
+| [0014](ADR-0014-alimentacion-por-bateria.md) | La batería **se eleva a 5 V y entra por `VIN`**, en vez de saltarse el regulador | ✅ `Aceptado` | 2026-08-30 |
 
 ## Decisiones que faltan por tomar
 

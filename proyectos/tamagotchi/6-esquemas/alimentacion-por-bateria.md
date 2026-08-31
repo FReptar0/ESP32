@@ -1,6 +1,7 @@
 # Alimentación por batería
 
-- **Estado:** 🟡 **Diseño — falta una pieza y falta un dato** (2026-08-30)
+- **Estado:** 🟢 **Diseño cerrado — falta comprar el elevador C-009** (2026-08-30)
+- **Decisión:** [ADR-0014](../1-decisiones/ADR-0014-alimentacion-por-bateria.md)
 - **Piezas:** [C-006 batería](../3-componentes/bateria-lipo-1000mah.md) ·
   [C-007 cargador](../3-componentes/tp4056-cargador.md) ·
   [C-008 interruptor](../3-componentes/interruptor-ss12d00.md)
@@ -51,28 +52,27 @@ bug de software"*.
 🔑 **Un regulador no puede subir tensión, solo bajarla — y ni siquiera hasta el
 borde.** Siempre se queda con un peaje.
 
-## 🔎 El dato que falta, y puede ahorrarte una compra
+## ✅ El dato que faltaba, resuelto
 
-Existe un caso en el que **sí funcionaría sin comprar nada**: que tu placa no
-lleve un `AMS1117` sino un regulador **de bajo margen** (`ME6211`, `SGM2212`,
-`XC6206`…), que solo se queda **0,1–0,25 V**. Con uno de esos, alimentar por
-`VIN` funcionaría desde 4,2 V hasta ~3,5 V — casi toda la batería.
+Se leyó el chip de la placa C-001 el 2026-08-30: pone **`1117 3.3 BWQ53`**, o sea
+un **`AMS1117-3.3`** — el de peaje alto, 1,1 V. Necesita **4,4 V** a la entrada y
+la batería llega a 4,2 V como mucho.
 
-Las placas ESP32 con **USB-C**, como la C-001, montan a menudo uno de estos.
+> **No alcanza ni recién cargada.** Hace falta elevar.
 
-> **Hay que mirarlo.** Es un chip diminuto de 3 patas, cerca del conector USB o
-> del pin `3V3`, con dos o tres letras encima. Con una foto de cerca se lee.
+⚠️ Al lado hay **dos transistores `J3Y` (S8050)**, que son el circuito de
+auto-reset y no tienen que ver con la alimentación. Se confundieron dos veces
+antes de dar con el bueno: el regulador es el que lleva **chapa metálica ancha**
+detrás; los `J3Y` son diminutos y van en pareja.
 
-De la respuesta salen dos caminos:
-
-| Lo que ponga | Qué significa | Qué hace falta |
-|---|---|---|
-| `AMS1117` / `1117` | Margen de 1,1 V | ⚠️ **Un elevador a 5 V** |
-| `ME6211` / `6211` / `SGM2212` / `662K` | Margen de 0,2 V | ✅ **Nada: `OUT+` a `VIN` y listo** |
+Elegido el camino de elevar a 5 V y entrar por `VIN`
+([ADR-0014](../1-decisiones/ADR-0014-alimentacion-por-bateria.md)): la batería
+usa **el mismo camino que el USB**, que lleva meses funcionando, y no se estrena
+ningún camino nuevo hacia el chip.
 
 ## El esquema
 
-La pieza en rojo es la que todavía no está decidida.
+La pieza en amarillo es la única que falta por comprar (C-009).
 
 ```mermaid
 flowchart LR
@@ -92,14 +92,14 @@ flowchart LR
     SW["C-008 · interruptor<br/>común + un extremo"]
     SW --> CONV
 
-    CONV["❓ Conversión<br/>según el regulador de la placa"]
-    CONV --> ESP["ESP32 C-001"]
+    CONV["C-009 · MT3608<br/>eleva a 5 V<br/>⚠️ ajustar ANTES"]
+    CONV -- "5 V" --> ESP["ESP32 C-001<br/>pin VIN → AMS1117 → 3,3 V"]
 
     ESP --> TFT["Pantalla GMT130"]
     ESP --> JOY["Joystick C-005"]
     GND --> ESP
 
-    style CONV fill:#5a1a1a,stroke:#ff6b6b,stroke-width:3px,color:#fff
+    style CONV fill:#3a3a1a,stroke:#ffd93d,stroke-width:3px,color:#fff
     style CELDA fill:#1a3a5a,stroke:#4a9eff,color:#fff
     style TP fill:#1a3a5a,stroke:#4a9eff,color:#fff
     style SW fill:#3a3a1a,stroke:#ffd93d,color:#fff
@@ -147,20 +147,26 @@ suelta.
 5. **Mide `OUT+` contra `OUT-`** con el interruptor encendido: debe salir la
    tensión de la batería (entre 3,0 y 4,2 V). ⚠️ **Con el interruptor apagado
    debe dar 0 V.** Si no da 0, algo está mal cableado: para y revisa.
-6. Solo entonces, conectar el convertidor y por último el ESP32.
+6. **Ajustar el MT3608 a 5 V.** ⚠️ **Este es el paso que puede matar la placa.**
+   Se alimenta el elevador desde la batería, **con la salida al aire**, y se gira
+   el tornillito midiendo `OUT+` contra `OUT-` hasta leer **5,0 V**. Puede venir
+   ajustado a 20 V de fábrica: con eso conectado, el ESP32 no sobrevive.
+7. Comprobar que sigue en 5 V al mover el interruptor. Solo entonces, conectar
+   `5 V` al pin **`VIN`** y la masa a **`GND`**. ⚠️ **Nunca a `3V3`.**
 
 ⚠️ **En ningún momento juntes el cable de `OUT+` con el de `OUT-`.** Es un
 cortocircuito de la batería.
 
-## Lo que queda por decidir
+## Lo que queda
 
-- 🔲 **Leer el regulador de la placa C-001.** De ahí sale si hace falta comprar
-  algo o no.
-- 🔲 Si hace falta: elegir entre elevar a 5 V (más simple, se aprovecha el
-  regulador que ya hay) o convertir a 3,3 V directo (más eficiente, más
-  autonomía). Merece su propio ADR, que la metodología pide expresamente para el
-  esquema de alimentación.
-- 🔲 **Medir la autonomía real.** La estimación de 4–6 h es un cálculo, no una
-  medida.
+- ✅ ~~Leer el regulador de la placa~~ → `AMS1117-3.3`, confirmado.
+- ✅ ~~Elegir el camino~~ → elevar a 5 V ([ADR-0014](../1-decisiones/ADR-0014-alimentacion-por-bateria.md)).
+- 🔲 **Comprar el MT3608** (C-009).
+- 🔲 **Medir la autonomía real.** La estimación de 4–5 h es un cálculo, no una
+  medida. Y el rendimiento total es de ~60 %: el `AMS1117` es lineal y quema como
+  calor todo lo que baja de 5 V a 3,3 V.
+- 🔲 **Vigilar si el interruptor se calienta.** Es de ~0,5 A y el pico del lado de
+  la batería sale ~750 mA. Los MT3608 corrientes no sacan el pin `EN`, así que
+  tiene que llevar la corriente.
 - 🔲 La protoboard no aguanta un aparato que se lleva de un sitio a otro. Ya
   estaba anotado en la bitácora y con batería pesa más.

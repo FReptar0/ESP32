@@ -45,6 +45,22 @@ por mi cuenta.
 
 # Historial
 
+## 2026-08-30 — `COMPRA` — Elevador MT3608 (C-009)
+
+- **Qué pasó:** Hace falta para alimentar con batería. Decidido en el
+  [ADR-0014](../proyectos/tamagotchi/1-decisiones/ADR-0014-alimentacion-por-bateria.md).
+- **Estado:** — → `Por comprar`
+- **Proyecto:** tamagotchi
+- **Por qué:** la placa C-001 monta un **`AMS1117-3.3`** (leído en el chip:
+  `1117 3.3 BWQ53`), que necesita **4,4 V** a la entrada. La batería llega a
+  4,2 V como mucho, así que no alcanza ni recién cargada. El MT3608 eleva los
+  3,0–4,2 V de la batería a 5 V y entra por `VIN`, el mismo camino que el USB.
+- **Nota:** ⚠️ **Es ajustable y NO viene a 5 V de fábrica.** Hay que ponerlo a
+  5 V con el polímetro y **sin nada conectado a la salida** antes de acercarlo al
+  ESP32. Puede venir a 20 V. Es el único paso del montaje que puede matar la placa.
+  ⚠️ Los módulos corrientes **no sacan el pin `EN`**, así que el interruptor C-008
+  tendrá que llevar la corriente y no solo la orden.
+
 ## 2026-08-30 — `ALTA` — Batería LiPo 1000 mAh (C-006)
 
 - **Qué pasó:** El usuario aporta una celda LiPo de bolsa para que el Tamagotchi

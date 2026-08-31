@@ -59,11 +59,33 @@ BOOT** — que es una molestia clásica en placas donde esto no funciona.
 | Concepto | Valor | Nota |
 |---|---|---|
 | Alimentación por USB | 5 V | La placa tiene un regulador que baja a 3.3 V |
+| **Regulador montado** | **`AMS1117-3.3`** | ✅ Leído en la placa el 2026-08-30 (`1117 3.3 BWQ53`) |
+| **Caída del regulador** | **~1,1 V** | ⚠️ Necesita **4,4 V** a la entrada. Decide todo el esquema de batería |
 | Alimentación por pin `VIN` | 5 V | Entrada alternativa |
 | Alimentación por pin `3V3` | 3.3 V | ⚠️ Se salta el regulador. Si metes 5 V aquí, mueres |
 | **Voltaje lógico** | **3.3 V** | ⚠️ El número que importa |
 | Consumo típico | ~80–160 mA | Con WiFi activo |
 | Consumo pico | **hasta ~500 mA** | ⚠️ Al transmitir por WiFi |
+
+### ⚠️ El `AMS1117` es lo que impide alimentar con la batería sin más
+
+Confirmado leyendo el chip: la franja entre el USB y la lata metálica lleva un
+`AMS1117-3.3`, no uno de los de bajo consumo.
+
+Un regulador **no puede subir tensión, solo bajarla — y ni siquiera hasta el
+borde**: se queda con un peaje. El del `AMS1117` es de **1,1 V**, así que para
+entregar 3,3 V necesita **4,4 V** a la entrada.
+
+Una LiPo de una celda va de 4,2 V a 3,0 V. **Nunca llega a 4,4 V, ni recién
+cargada.** Conectarla a `VIN` da un aparato que funciona un rato y luego se
+reinicia solo — el fallo que parece de software y no lo es.
+
+Al lado hay **dos transistores `J3Y` (S8050)**: son el circuito de auto-reset, no
+tienen nada que ver con la alimentación. Es fácil confundirlos porque están en la
+misma zona; el regulador es el que lleva **chapa metálica ancha** detrás.
+
+Consecuencia: hace falta una etapa de conversión. Ver
+[`6-esquemas/alimentacion-por-bateria.md`](../6-esquemas/alimentacion-por-bateria.md).
 
 > ### ⚠️ Los pines del ESP32 son de 3.3 V y no toleran 5 V
 >

@@ -42,6 +42,7 @@
 | C-006 | **Batería LiPo** 1 celda, bolsa | Alimentación | Disponible | 1 | **3,0–4,2 V** ⚠️ | tamagotchi | `3.7V 1000 mAh 3.7 Wh`, lote 202407. Una celda | ⚠️ **No se puede apagar**: siempre tiene tensión. Ya soldada a `B+`/`B-` de C-007 |
 | C-007 | Cargador **TP4056** con protección | Alimentación | Disponible | 1 | **= la batería** ⚠️ | tamagotchi | Pastillas `B+ B- OUT+ OUT-`. Carga por USB a 4,2 V. Lleva protección (sobredescarga y corto) | ⚠️ **`OUT+` NO da 5 V**, da 3,0–4,2 V. `OUT+`/`OUT-` aún sin soldar |
 | C-008 | **Interruptor deslizante** SPDT tipo SS12D00 | Entrada | Disponible | 1 | — | tamagotchi | 3 patas; **la del medio es la común**. Suelen ser de 0,5 A | Cable rojo ya soldado a la pata del medio. ⚠️ 0,5 A va justo contra los 500 mA de pico del ESP32 |
+| C-009 | **Elevador** MT3608 (step-up ajustable) | Alimentación | **Por comprar** | 1 | ent. 2–24 V · sal. hasta 28 V | tamagotchi | Eleva los 3,0–4,2 V de la batería a 5 V para entrar por `VIN` | ⚠️ **Ajustable: NO viene a 5 V.** Calibrar con polímetro y sin carga ANTES de conectarlo. [ADR-0014](../proyectos/tamagotchi/1-decisiones/ADR-0014-alimentacion-por-bateria.md) |
 
 **Resumen:** 3 microcontroladores, 4 pantallas. ✅ Sin bloqueantes de material.
 
