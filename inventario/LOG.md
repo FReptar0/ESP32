@@ -45,6 +45,45 @@ por mi cuenta.
 
 # Historial
 
+## 2026-08-30 — `ALTA` — Batería LiPo 1000 mAh (C-006)
+
+- **Qué pasó:** El usuario aporta una celda LiPo de bolsa para que el Tamagotchi
+  deje de depender del cable USB.
+- **Estado:** — → `Disponible`
+- **Proyecto:** tamagotchi *(pendiente de asignar hasta resolver la conversión)*
+- **Specs observadas** (serigrafía de la propia celda): `3.7V · 1000 mAh ·
+  3.7 Wh · 202407`. Una sola celda, con el `+` marcado junto al cable rojo.
+- **Nota:** ⚠️ Ya viene **soldada a `B+`/`B-`** del cargador C-007. Una LiPo
+  **no se puede apagar**: sus terminales tienen tensión siempre. Cortocircuitar
+  rojo con negro, aunque sea un instante, puede hincharla o incendiarla.
+
+## 2026-08-30 — `ALTA` — Cargador TP4056 con protección (C-007)
+
+- **Qué pasó:** Módulo cargador aportado junto con la batería, ya soldado a ella.
+- **Estado:** — → `Disponible`
+- **Proyecto:** tamagotchi
+- **Specs observadas:** placa azul con conector USB, chip `4056` y un segundo
+  chip pequeño de protección. Cuatro pastillas rotuladas **`B+` `B-` `OUT+`
+  `OUT-`**. `B+`/`B-` **ya soldadas** a la celda; `OUT+`/`OUT-` **libres**.
+- **Nota:** ⚠️ **`OUT+` NO da 5 V.** Da la tensión de la batería, entre 3,0 y
+  4,2 V según lo cargada que esté. Es el punto que decide todo el esquema de
+  alimentación (ver `6-esquemas/alimentacion-por-bateria.md`).
+  Que existan `OUT` separadas de `B` indica que **sí lleva protección** contra
+  sobredescarga y cortocircuito, que es la versión buena de este módulo.
+
+## 2026-08-30 — `ALTA` — Interruptor deslizante SPDT (C-008)
+
+- **Qué pasó:** Interruptor de dos posiciones para encender y apagar el aparato
+  sin desconectar la batería.
+- **Estado:** — → `Disponible`
+- **Proyecto:** tamagotchi
+- **Specs observadas:** tipo `SS12D00`, tres patas en línea. **La pata del medio
+  es la común** y ya tiene soldado un cable rojo. Las dos de los extremos son
+  los dos destinos; para encender/apagar solo se usa **una** de ellas.
+- **Nota:** ⚠️ Estos interruptores se venden con **0,5 A** de corriente máxima, y
+  el ESP32 llega a **500 mA de pico** al transmitir. Va justo. Pendiente de
+  decidir si lleva la corriente o solo una señal de encendido.
+
 ## 2026-08-29 — `NOTA` — ✅ C-001 identificada y funcionando
 
 - **Qué pasó:** La placa fue detectada, identificada e interrogada con `esptool`.
