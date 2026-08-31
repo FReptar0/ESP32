@@ -6,9 +6,227 @@ fallaron, las horas perdidas, las sospechas sin confirmar. Las *decisiones* van 
 
 ---
 
-## 2026-08-30 — Sesión 2: el joystick, los cuatro modos, y dos días equivocándome con método
+## 2026-08-30 — Sesión 3: un cuelgue que no era mío, Snoopy, y la batería
 
 ### 🔚 Cierre de sesión — leer esto primero al retomar
+
+**Estado físico (lo que no está en Git):**
+
+| | |
+|---|---|
+| Placa | ESP32-D0WD-V3 · MAC `84:1F:E8:2C:3E:C4` · `/dev/cu.usbserial-0001` |
+| Firmware cargado | **`94b8fe4`**, sin `+cambios`: coincide con lo commiteado. *Verificado preguntándoselo a la placa.* Si `HEAD` va por delante, mira si los commits de después tocan `firmware/` antes de recargar |
+| Cableado | Igual que la sesión 2. **Nada nuevo soldado**: la batería está aparte |
+| Al cerrar | **Encendida y funcionando**, alimentada por USB |
+| Puerto serie | Libre |
+
+**Medido al cerrar** (no supuesto):
+
+```
+RAM libre 184.100 B · minimo 64.600 B · bloque contiguo 110.580 B
+fotograma medio 5 ms · peor 65 ms
+0 reinicios · 0 turnos atascados
+```
+
+---
+
+### 🔴 Lo importante: el aparato se colgaba, y no era culpa de lo nuevo
+
+La sesión empezó añadiendo la pantalla oculta y **el aparato se quedó tieso**: sin
+pantalla, sin música, sin joystick. Lo lógico parecía que fuera culpa del cambio
+recién cargado.
+
+**No lo era.** Se descartó cargando el firmware ANTERIOR y reproduciéndolo: mismo
+cuelgue, misma firma. El fallo llevaba ahí desde la sesión 2.
+
+🔑 **Que un fallo aparezca justo después de un cambio no prueba que sea del
+cambio. Prueba que el cambio te hizo usar el aparato de otra manera.** Sin esa
+comprobación habría estado horas buscando en el sitio equivocado.
+
+La causa, entera en [`cuelgue-por-turno-anidado.md`](5-investigacion/cuelgue-por-turno-anidado.md):
+
+```
+loop()  [núcleo 1]
+ └─ CON_DATOS({                        ← coge el turno
+      pintarContenidoModo()
+       └─ pintarPortada()
+           └─ imagenQueTocaAhora()
+               └─ CON_DATOS({ ... })   ← lo vuelve a pedir  ⛔
+```
+
+El mutex no es reentrante: el núcleo 1 **se cerraba la puerta por dentro** y el 0
+se quedaba fuera. Los dos, para siempre, porque la espera era `portMAX_DELAY`.
+
+**Cómo se cazó, que es lo reutilizable:** sin `rst:`, sin `Guru Meditation` y sin
+`Backtrace`, el aparato no se había roto — *estaba esperando*. Se le puso un plazo
+al turno **sin cambiar el comportamiento** (si se agota, avisa y sigue esperando
+igual) y al tercer intento salió con la línea exacta:
+
+```
+[TURNO] datos: 3s esperando · nucleo 1 · linea 901
+```
+
+**Ese chivato se queda puesto.** No es depuración olvidada: convierte un cuelgue
+mudo en un mensaje. Y queda una comprobación que sigue las llamadas de forma
+transitiva y avisa si alguien vuelve a anidar turnos. Antes daba dos; ahora, cero.
+
+---
+
+### 🥚 La pantalla oculta (RF-15 y RF-16) — cerrada
+
+Se abre con **`↑ ↑ ↓ ↓`**, la mitad del Código Konami ([ADR-0012](1-decisiones/ADR-0012-combinacion-secreta.md)).
+Lo que decidió no fue el guiño sino que arriba y abajo son **los únicos gestos que
+no piden nada a la red**. Y como el bucle tiene 4 pantallas, subir dos y bajar dos
+vuelve al punto de partida: la secuencia se escribe sin dejar rastro.
+
+Muestra WiFi, señal, RAM libre, bloque contiguo, versión y tiempo encendido.
+Animación de ondas y corazón al abrir; **`Te quiero!!`** al salir.
+
+**No se guarda en NVS, a propósito:** si se guardara y la placa se reiniciara
+sola, quien la reciba despertaría en una pantalla de diagnóstico sin música y sin
+saber salir.
+
+### 🐛 Dos fallos míos en esa pantalla, los dos verificados corregidos
+
+1. **La ventana entre gestos era de 1200 ms por suposición y no bastaba.** Hiciste
+   la secuencia entera bien y no se abrió nada. Medida en la placa, los huecos
+   reales llegan a **1047 ms** — iba al filo. Subida a 2000, y ahora cada paso
+   escribe cuánto tardó para poder reajustarla con datos.
+
+   Los huecos medidos: `546 551 577 770 370 723 1047 477 534 579 482 ms`.
+
+2. **Al salir, la pantalla se quedaba negra.** La despedida apagaba la luz y
+   confiaba el encendido a `repintarModo`, que vive dentro de un `if` y **no corre
+   si no hay canción sonando**.
+
+   🔑 **Apagar en un sitio y encender en otro solo vale si el segundo corre
+   SIEMPRE. Si tiene condiciones, no vale.**
+
+---
+
+### 🐶 Snoopy en la pantalla de carga
+
+El arranque decía `conectando al WiFi...` en texto. Ahora Snoopy baila
+([ADR-0013](1-decisiones/ADR-0013-animacion-de-carga.md)).
+
+**No se reproduce el GIF.** Se convierte en el ordenador a fotogramas de 1 bit con
+[`tools/gen-animacion.py`](tools/gen-animacion.py):
+
+| | |
+|---|---|
+| Color 240×240 | 115.200 B por cuadro → imposible |
+| **1 bit 152×184** | **3.496 B por cuadro · 24.472 B los siete** |
+
+🔑 **El personaje juega a favor: Snoopy YA es línea negra sobre blanco.** Los 16
+bits de color no representaban información, solo ocupaban sitio.
+
+**Cinco cosas del conversor que parecían obvias y estaban mal:**
+
+1. *"Tinta = lo oscuro."* La franja naranja de la pared también es oscura. Hay que
+   exigir **oscuro Y neutro**: su negro tiene saturación 11; la franja, 69–135.
+2. *"Bajo el umbral de saturación y ya."* Con 30 desaparecía la franja **y el
+   contorno salía roto** (de 21.535 a 18.830 px de tinta). El decorado se quita por
+   su **forma**, no por su color.
+3. *"Borro lo que esté lejos del trozo más grande."* Se cargó a Snoopy entero: el
+   filtro anterior ya le había partido el contorno, así que el trozo más grande
+   pasó a ser **su oreja**. La función se dejó escrita con el aviso, porque la idea
+   es tentadora y se volvería a intentar.
+4. *"El encuadre es el mínimo y el máximo."* Doce píxeles de sombra a 150 px hacían
+   que la caja abarcara media imagen. 🔑 **Contra un dato con motas se usa un
+   percentil, nunca el máximo — el máximo ES la mota.**
+5. *"Centrar la caja lo centra."* **Lo dijiste tú mirando la pantalla y tenías
+   razón.** Su oreja sobresale a la derecha, así que la caja quedaba centrada y el
+   cuerpo se veía corrido. Medido: torso en x=54 de 64. 🔑 **Un personaje no es un
+   rectángulo: lo que el ojo centra es su eje, no sus extremos.**
+
+**Y dos pausas que reportaste y eran reales:**
+
+- `drawBitmap` de la librería dibuja **punto por punto**, abriendo el bus una vez
+  por cada uno de los 27.968 píxeles. Volcando fila entera: ~11 ms.
+- **Snoopy se paraba al pedir el token.** Se pedía desde `setup()`, que corre en el
+  núcleo del **dibujo** — una excepción sin motivo a la regla que ordena todo este
+  firmware. Ahora lo pide el núcleo 0.
+  Y había una segunda pausa que aún no habías visto: la animación terminaba con
+  `setup()`, pero el núcleo 0 seguía consultando. Ahora **acaba cuando hay algo que
+  enseñar**, no cuando acaba el arranque.
+
+  🔑 **Una animación que existe para decir "sigo vivo" no puede pararse por culpa
+  de la espera que venía a disimular.**
+
+---
+
+### 🔋 La batería: diseñada, sin montar
+
+Entran [C-006](../../inventario/INVENTARIO.md) (LiPo 1000 mAh), C-007 (TP4056 con
+protección) y C-008 (interruptor SPDT). **Nada soldado todavía al aparato.**
+
+**El hallazgo:** `OUT+` del TP4056 **no da 5 V** — da lo que tenga la batería,
+3,0–4,2 V. Y los 3,3 V que necesita el ESP32 caen **en medio de ese rango**.
+
+Se leyó el regulador de la placa: **`AMS1117-3.3`** (`1117 3.3 BWQ53`). Peaje de
+1,1 V, o sea que quiere 4,4 V a la entrada. **La batería no llega ni recién
+cargada.**
+
+⚠️ Costó dar con el chip: hay dos transistores **`J3Y`** al lado que son el
+circuito de auto-reset, y se confundieron dos veces. El regulador es el que lleva
+**chapa metálica ancha** detrás.
+
+Decidido en [ADR-0014](1-decisiones/ADR-0014-alimentacion-por-bateria.md): elevar
+a 5 V con un **MT3608** (C-009, por comprar) y entrar por `VIN`. Se descartó el
+camino más eficiente —buck-boost a 3,3 V directo, 6–8 h en vez de 4–5— porque
+alimenta el chip **sin ninguna protección en medio**, y esto es un regalo.
+
+---
+
+### 🔜 En qué me quedé — siguiente sesión
+
+#### 🛒 Lo único que bloquea
+
+**Comprar el MT3608** (C-009). Sin él la batería no se puede conectar a nada.
+
+#### ⚠️ Cuando llegue, en este orden y midiendo entre paso y paso
+
+Está detallado en [`6-esquemas/alimentacion-por-bateria.md`](6-esquemas/alimentacion-por-bateria.md).
+Los dos avisos que pueden costar material:
+
+1. ⚠️ **El MT3608 es ajustable y NO viene a 5 V.** Puede llegar a 20 V. Hay que
+   calibrarlo con el polímetro **y con la salida al aire** antes de acercarlo al
+   ESP32. Es el único paso del montaje que puede matar la placa.
+2. ⚠️ **Nunca juntar `OUT+` con `OUT-`.** Es cortocircuitar una LiPo. Y recuerda:
+   **una batería no se puede apagar**, sus terminales tienen tensión siempre.
+
+#### 📏 Medir, que aquí todo son estimaciones
+
+- **La autonomía real.** Los 4–5 h son un cálculo sobre un consumo supuesto de
+  150 mA. **Nunca se ha medido el consumo del aparato.**
+- **Si el interruptor se calienta.** Es de ~0,5 A y el pico del lado de la batería
+  sale ~750 mA. Los MT3608 corrientes no sacan el pin `EN`, así que tiene que
+  llevar la corriente.
+- **Si el `AMS1117` quema.** Tibio es normal; que no se pueda tocar, no.
+
+#### 👀 Verificaciones visuales que siguen pendientes de la sesión 2
+
+Ninguna se ha hecho todavía: legibilidad del modo sin letra a distancia, el
+congelón de ~400 ms de la portada, y si vuelve el parpadeo. Las de esta sesión
+—pantalla oculta, salida con música pausada y Snoopy— **sí están verificadas
+mirando**.
+
+#### 📋 De menor urgencia, arrastrado
+
+- Rendirse ante una canción sin letra sigue costando ~9 s.
+- Picos de 5 s en las órdenes cuando chocan con `consultar()`.
+- **La flash está al 91,4 %** (112 KB libres). Lo siguiente que ocupe sitio obliga
+  a pasar a `huge_app.csv` — hay 1,25 MB desperdiciados en una partición `app1`
+  que este proyecto no usa. Merecería su propio ADR.
+- ⚠️ **La protoboard no aguanta un aparato que se lleva de un sitio a otro.** Con
+  batería pesa más y se mueve: antes de envolverlo hay que soldar o pasar a placa
+  perforada.
+
+---
+
+## 2026-08-30 — Sesión 2: el joystick, los cuatro modos, y dos días equivocándome con método
+
+### 🔚 Cierre de la sesión 2 *(histórico — el estado actual está arriba)*
 
 **Estado físico (lo que no está en Git):**
 

@@ -112,21 +112,26 @@ mirando la pantalla. `/cerrar-sesion` captura eso; las genéricas no.
 
 ## Estado actual
 
-🟢 **El Tamagotchi funciona y ya se puede tocar.** Además de mostrar canción,
-artista, álbum, playlist, progreso y **letras sincronizadas**, ahora tiene un
-**joystick** (C-005) que pausa, salta de canción, recorre **cuatro pantallas** y
-permite **elegir playlist**. El ESP32 lo hace todo solo: se conecta, sincroniza la
-hora, renueva su propio token, descarga carátulas y las dibuja.
+🟢 **El Tamagotchi está terminado: los 16 requerimientos, resueltos.** Muestra
+canción, artista, álbum, playlist, progreso y **letras sincronizadas**; el
+**joystick** (C-005) pausa, salta, recorre **cuatro pantallas** y elige playlist.
+Arranca con **Snoopy bailando** y esconde una **quinta pantalla secreta**.
 
-**Las cuatro pantallas** (arriba/abajo, en bucle, con fundido entre ellas):
-sin letra · con letra · portada del álbum · elegir playlist.
+**Las cuatro pantallas** (arriba/abajo, en bucle, con fundido): sin letra · con
+letra · portada del álbum · elegir playlist.
 
-**14 de 16 requerimientos.** Faltan **RF-15 y RF-16**: la pantalla oculta de
-estado con su animación de sorpresa. RF-10 (volumen) quedó **descartado** — el
-joystick no tiene eje libre, decidido en el [ADR-0007](proyectos/tamagotchi/1-decisiones/ADR-0007-joystick-como-control.md).
+**La quinta, oculta:** se abre con **`↑ ↑ ↓ ↓`** y se cierra con un clic. Muestra
+el estado interno y se despide con un `"Te quiero!!"`. RF-10 (volumen) quedó
+**descartado** — el joystick no tiene eje libre ([ADR-0007](proyectos/tamagotchi/1-decisiones/ADR-0007-joystick-como-control.md)).
 
-⚠️ **Hay verificaciones visuales pendientes** de la sesión del 2026-08-30: están
-listadas en el bloque `🔚 Cierre de sesión` de la bitácora.
+🔋 **Lo único abierto es la batería.** Está diseñada y documentada, pero **falta
+comprar el elevador MT3608** (C-009). Hasta entonces vive enchufado por USB.
+⚠️ La batería **no se puede conectar directamente**: el `AMS1117` de la placa
+necesita 4,4 V y la LiPo llega a 4,2 V como mucho. Ver
+[ADR-0014](proyectos/tamagotchi/1-decisiones/ADR-0014-alimentacion-por-bateria.md).
+
+⚠️ **Quedan verificaciones visuales pendientes de la sesión 2**, listadas en el
+bloque `🔜 En qué me quedé` de la bitácora.
 
 ### 🎁 Va a ser un regalo — cambia las prioridades
 
@@ -135,15 +140,16 @@ puede depurarlo ni reiniciarlo a conciencia:
 
 - **La estabilidad pesa más que las funciones nuevas.** Antes de añadir algo,
   medir que lo que hay sigue estable.
-- **Todo fallo debe degradar, no romper.** Es el criterio aplicado en todo el
-  firmware: sin letra se sigue viendo la canción, sin red se avisa en rojo, si
-  baja la memoria el hilo de letras se aparta solo.
+- **Todo fallo debe degradar, no romper.** Sin letra se sigue viendo la canción,
+  sin red se avisa en rojo, si baja la memoria el hilo de letras se aparta solo.
+  Y desde la sesión 3, **un cuelgue ya no es mudo**: el chivato del turno dice
+  quién espera, en qué núcleo y en qué línea.
 - **Los detalles visuales no son adornos:** son lo único que verá quien lo reciba.
 
 - Placa: **ESP32-D0WD-V3**, MAC `84:1F:E8:2C:3E:C4`, puerto `/dev/cu.usbserial-0001`
 - Pantalla: **GMT130** (ST7789, 240×240) cableada según
   [`6-esquemas/conexiones-fisicas.md`](proyectos/tamagotchi/6-esquemas/conexiones-fisicas.md)
-- Los **9 supuestos** del proyecto están resueltos y los **9 ADRs** decididos
+- Los **9 supuestos** están resueltos y hay **14 ADRs** decididos
 
 **Arquitectura del firmware:** tres hilos —Spotify (rápido), letras (lento) y
 dibujo—, con un mutex de red que garantiza **una sola conexión cifrada a la vez**.
@@ -151,10 +157,16 @@ Ver [`6-esquemas/mapa-de-memoria.md`](proyectos/tamagotchi/6-esquemas/mapa-de-me
 
 🔑 **La regla que ordena todo el firmware:** el núcleo 0 habla con la red, el
 núcleo 1 dibuja, y **nunca al revés**. El joystick se lee en el núcleo 1 y deja
-una nota en una cola; el núcleo 0 la recoge y la cumple cuando le toca turno. Las
-imágenes las baja el 0 y las pinta el 1. Cada resultado que tarda en llegar lleva
-una marca de a quién pertenece — sin ella, lo lento acaba dibujado en el sitio
-equivocado.
+una nota en una cola; el núcleo 0 la recoge. Cada resultado que tarda en llegar
+lleva una marca de a quién pertenece — sin ella, lo lento acaba dibujado en el
+sitio equivocado.
+
+⚠️ **Y hay un corolario que costó un cuelgue entero:** una función que pide el
+turno de datos **no se puede llamar desde dentro de ese turno**. El mutex no es
+reentrante y el núcleo se queda esperándose a sí mismo, en silencio y para
+siempre. Lo difícil es que la petición anidada puede estar **tres llamadas más
+abajo**, invisible a ojo. Ver
+[`5-investigacion/cuelgue-por-turno-anidado.md`](proyectos/tamagotchi/5-investigacion/cuelgue-por-turno-anidado.md).
 
 Antes de dar por hecho cualquier estado, compruébalo:
 
