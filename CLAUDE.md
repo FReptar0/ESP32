@@ -96,6 +96,22 @@ No asumir que ya se dijeron. Repetirlos en contexto:
 
 ---
 
+## ⚠️ Dos placas idénticas, un solo nombre de puerto
+
+Desde el 2026-11-25 hay dos proyectos con placa propia:
+
+| MAC | Placa | Proyecto |
+|---|---|---|
+| `84:1F:E8:2C:3E:C4` | C-001 | **tamagotchi — el regalo, no tocar** |
+| `E0:8C:FE:30:C9:1C` | C-011 | nfc-pn532 |
+
+Las dos salen como **`/dev/cu.usbserial-0001`** (sus CP2102 llevan el mismo
+número de serie). **El puerto no dice cuál está enchufada; la MAC sí.** Antes de
+cargar o borrar firmware: `esptool --port /dev/cu.usbserial-0001 read-mac`.
+`/abrir-sesion` todavía asume que la placa conectada es la del Tamagotchi.
+
+---
+
 ## Skills de este taller
 
 | Skill | Cuándo usarla |

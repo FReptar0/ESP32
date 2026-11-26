@@ -45,6 +45,79 @@ por mi cuenta.
 
 # Historial
 
+## 2026-11-25 — `ALTA` — Llavero NFC (C-013)
+
+- **Qué pasó:** Venía en el kit del PN532.
+- **Estado:** — → `En uso`
+- **Proyecto:** nfc-pn532 (objeto de prueba)
+- **Nota:** Tipo de chip **sin confirmar**. En estos kits suele ser MIFARE
+  Classic 1K, pero lo dirá el propio PN532 al leerlo. No lleva pila: se alimenta
+  del campo del lector.
+
+## 2026-11-25 — `ALTA` — Tarjetas NFC ×2 (C-012)
+
+- **Qué pasó:** Venían en el kit del PN532.
+- **Estado:** — → `En uso`
+- **Proyecto:** nfc-pn532 (objetos de prueba)
+- **Nota:** Tipo de chip **sin confirmar** (como el llavero C-013). Tener dos
+  tarjetas sirve para comprobar que el lector las **distingue**: cada una debe
+  dar un UID distinto, y siempre el mismo.
+
+## 2026-11-25 — `ALTA` — ESP32-S NodeMCU v1.1 nueva (C-011)
+
+- **Qué pasó:** Entra una placa nueva, ya cableada al PN532. Es la que se
+  identificó por error como C-002 en la entrada de abajo.
+- **Estado:** — → `En uso`
+- **Proyecto:** nfc-pn532
+- **Nota:** Mismo modelo que la C-001. **ESP32-D0WD-V3 rev v3.1**, 4 MB de flash,
+  **CP2102**, **MAC `E0:8C:FE:30:C9:1C`**. Venía con un diagnóstico I2C
+  descartable; se borró la flash entera.
+  ⚠️ **Sale en la Mac con el mismo puerto que la C-001**
+  (`/dev/cu.usbserial-0001`). Solo la MAC las distingue.
+
+## 2026-11-25 — `NOTA` — Corrección: la placa del nfc-pn532 no era la C-002
+
+- **Qué pasó:** En la entrada `ASIGNACIÓN` de abajo se **supuso** que la placa
+  conectada era la C-002 porque era la única refacción de ese modelo. El usuario
+  aclaró que es **una placa nueva** → se da de alta como C-011.
+- **Estado (C-002):** `En uso` → `Disponible`
+- **Proyecto:** —
+- **Nota:** La C-002 sigue en algún cajón y su MAC **sigue sin conocerse**. La
+  entrada de abajo se conserva tal cual: es el registro de un supuesto que
+  resultó falso. Lección: preguntar antes de asignar una pieza que no se ha
+  visto.
+
+## 2026-11-25 — `ALTA` — Módulo NFC PN532 Kit V3, Fydun (C-010)
+
+- **Qué pasó:** Entra al taller un lector NFC para el proyecto nuevo
+  `nfc-pn532`. Llega ya cableado por I2C a la C-002.
+- **Estado:** — → `En uso`
+- **Proyecto:** nfc-pn532
+- **Specs observadas:** placa roja con chip NXP **PN532**, antena impresa en el
+  borde, interruptor DIP de 2 posiciones para elegir la interfaz (HSU / I2C /
+  SPI), conector de 4 pines `SCL SDA VCC GND` y otro de 8 para SPI.
+  **Contesta en I2C en `0x24`**, medido el 2026-11-25.
+- **Nota:** Alimentado a **3,3 V** a propósito: así sus líneas de datos se
+  quedan a 3,3 V, que es lo que toleran los pines del ESP32. ⚠️ El DIP se cambia
+  **solo sin corriente**: el chip lo lee al encender. Pendiente saber si el kit
+  trajo tarjetas o llaveros; si sí, se dan de alta aparte.
+
+## 2026-11-25 — `ASIGNACIÓN` — ESP32-S NodeMCU v1.1 (C-002)
+
+- **Qué pasó:** Se identifica con `esptool` y se asigna al proyecto `nfc-pn532`.
+  Venía con un firmware de diagnóstico I2C (descartable) y se le **borró la
+  flash entera**.
+- **Estado:** `Disponible` → `En uso`
+- **Proyecto:** nfc-pn532
+- **Nota:** Identidad confirmada: **ESP32-D0WD-V3 rev v3.1**, 4 MB de flash,
+  **CP2102**, **MAC `E0:8C:FE:30:C9:1C`**. Es la misma placa que la C-001, como
+  se suponía. Se asume que es la C-002 porque es la única refacción de ese
+  modelo en el inventario.
+  ⚠️ **Sale en la Mac con el mismo puerto que la C-001**
+  (`/dev/cu.usbserial-0001`), porque los dos CP2102 llevan el número de serie
+  `0001`. **Solo la MAC las distingue.** Comprobarla antes de cada carga de
+  firmware: un descuido aquí sobrescribe el Tamagotchi.
+
 ## 2026-08-30 — `COMPRA` — Elevador MT3608 (C-009)
 
 - **Qué pasó:** Hace falta para alimentar con batería. Decidido en el

@@ -15,14 +15,15 @@ ESP32/
 ├── metodologia/        📐 Las 6 fases + plantillas
 ├── inventario/         📦 Qué material hay, en qué estado (compartido por todos)
 ├── proyectos/          🔨 Un proyecto por carpeta
-│   └── tamagotchi/
+│   ├── tamagotchi/
+│   └── nfc-pn532/
 └── herramientas/       ⚙️ Scripts del taller
 ```
 
 | Carpeta | Para qué |
 |---|---|
 | [`metodologia/`](metodologia/) | Cómo se trabaja aquí. **Léelo primero.** |
-| [`inventario/`](inventario/) | Inventario general de componentes + su bitácora — **3 ESP32 y 4 pantallas TFT** |
+| [`inventario/`](inventario/) | Inventario general de componentes + su bitácora — **4 ESP32, 4 pantallas TFT y 1 lector NFC** |
 | [`proyectos/`](proyectos/) | Los proyectos |
 | [`herramientas/`](herramientas/) | `nuevo-proyecto.sh` y utilidades |
 
@@ -33,6 +34,7 @@ ESP32/
 | Proyecto | Qué es | Estado |
 |---|---|---|
 | [🐣 tamagotchi](proyectos/tamagotchi/) | Aparato con ESP32 que muestra qué suena en Spotify | 🟢 **Completo** · canción, artista, progreso y letras sincronizadas |
+| [📡 nfc-pn532](proyectos/nfc-pn532/) | Lector NFC de credenciales universitarias (app Android) | 🟢 **Funciona con la app real** · SPI |
 
 ---
 
